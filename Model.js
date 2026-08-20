@@ -231,6 +231,76 @@ function formatVerificationKey(key) {
   return k.length === 8 ? k.slice(0, 4) + " " + k.slice(4) : k
 }
 
+// ---------- kdeconnect.notifyrc pairing-popup override ----------
+
+// KNotification per-event user override: a [Event/pairingRequest] section
+// with an empty Action= disables only the pairing popup (system default is
+// Action=Popup in /usr/share/knotifications6/kdeconnect.notifyrc). These
+// edit the user file textually, preserving unrelated content byte-for-byte.
+
+var NOTIFYRC_SECTION = "[Event/pairingRequest]"
+
+function _notifyrcSectionRange(lines) {
+  var start = -1
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === NOTIFYRC_SECTION) { start = i; break }
+  }
+  if (start === -1) return null
+  var end = lines.length
+  for (var j = start + 1; j < lines.length; j++) {
+    if (lines[j].trim().charAt(0) === "[") { end = j; break }
+  }
+  return { start: start, end: end }
+}
+
+function notifyrcPairingPopupSuppressed(text) {
+  var lines = String(text || "").split("\n")
+  var range = _notifyrcSectionRange(lines)
+  if (!range) return false
+  for (var i = range.start + 1; i < range.end; i++) {
+    var m = lines[i].match(/^Action\s*=\s*(.*)$/)
+    if (m) {
+      var v = m[1].trim()
+      return v === "" || v.toLowerCase() === "none"
+    }
+  }
+  return false
+}
+
+function notifyrcSetPairingPopupSuppressed(text, suppressed) {
+  var lines = String(text || "").split("\n")
+  var range = _notifyrcSectionRange(lines)
+  if (suppressed) {
+    if (range) {
+      // Replace an existing Action line, or add one under the header.
+      for (var i = range.start + 1; i < range.end; i++) {
+        if (/^Action\s*=/.test(lines[i])) {
+          lines[i] = "Action="
+          return lines.join("\n")
+        }
+      }
+      lines.splice(range.start + 1, 0, "Action=")
+      return lines.join("\n")
+    }
+    var out = lines.join("\n")
+    if (out.length > 0 && !/\n$/.test(out)) out += "\n"
+    return out + NOTIFYRC_SECTION + "\nAction=\n"
+  }
+  if (!range) return lines.join("\n")
+  // Drop our Action override; drop the whole section if nothing else in it.
+  var kept = []
+  var hasOther = false
+  for (var k = range.start + 1; k < range.end; k++) {
+    if (/^Action\s*=/.test(lines[k])) continue
+    if (lines[k].trim() !== "") hasOther = true
+    kept.push(lines[k])
+  }
+  var head = lines.slice(0, range.start)
+  var tail = lines.slice(range.end)
+  var mid = hasOther ? [lines[range.start]].concat(kept) : []
+  return head.concat(mid).concat(tail).join("\n")
+}
+
 // ---------- backend state ----------
 
 // Distinct failure states (DesignDocument.md §24); never collapse these.
@@ -273,6 +343,8 @@ if (typeof module !== "undefined") {
     deviceGlyph: deviceGlyph,
     providerLabel: providerLabel,
     statusLine: statusLine,
-    formatVerificationKey: formatVerificationKey
+    formatVerificationKey: formatVerificationKey,
+    notifyrcPairingPopupSuppressed: notifyrcPairingPopupSuppressed,
+    notifyrcSetPairingPopupSuppressed: notifyrcSetPairingPopupSuppressed
   }
 }

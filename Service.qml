@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import Quickshell.Io
 import "Model.js" as Model
 
@@ -144,6 +145,7 @@ Item {
   function sendClipboard(id) { _cliAction("clipboard", id, ["kdeconnect-cli", "--send-clipboard", "--device", id]) }
   // text is user input passed as a single argv element — never a shell string.
   function shareText(id, text) { _cliAction("sharetext", id, ["kdeconnect-cli", "--share-text", text, "--device", id]) }
+  function shareFile(id, path) { _cliAction("sharefile", id, ["kdeconnect-cli", "--share", path, "--device", id]) }
 
   function rediscover() {
     dbus.call(_daemonCall("forceOnNetworkChange"), function () { refresh() })
@@ -189,6 +191,30 @@ Item {
     id: actionClear
     interval: 2500
     onTriggered: root.action = { kind: "", deviceId: "", status: "idle" }
+  }
+
+  // ---- pairing-popup suppression ----
+  // User-opt-in override of KNotification's pairingRequest popup so the
+  // panel's pairing card isn't duplicated by a system notification. Only
+  // that one event is touched; synced phone notifications are unaffected.
+  property bool pairPopupSuppressed: false
+
+  function setPairPopupSuppressed(on) {
+    var current = ""
+    try { current = notifyrcFile.text() || "" } catch (e) { current = "" }
+    notifyrcFile.setText(Model.notifyrcSetPairingPopupSuppressed(current, on))
+    pairPopupSuppressed = on
+  }
+
+  FileView {
+    id: notifyrcFile
+    path: Quickshell.env("HOME") + "/.config/kdeconnect.notifyrc"
+    printErrors: false
+    atomicWrites: true
+    watchChanges: true
+    onLoaded: root.pairPopupSuppressed = Model.notifyrcPairingPopupSuppressed(text())
+    onLoadFailed: root.pairPopupSuppressed = false
+    onFileChanged: reload()
   }
 
   // ---- event-driven invalidation ----

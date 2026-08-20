@@ -159,3 +159,33 @@ var liveDev = M.normalizeDevice("x", { isPaired: true, isReachable: true, name: 
 assert.deepStrictEqual(liveDev.battery, { available: true, percentage: 84, charging: false })
 assert.ok(liveDev.caps.ping && liveDev.caps.ring && liveDev.caps.clipboard)
 console.log("battery fixture tests passed")
+
+// ---- notifyrc pairing-popup override ----
+var empty = ""
+assert.strictEqual(M.notifyrcPairingPopupSuppressed(empty), false)
+var sup = M.notifyrcSetPairingPopupSuppressed(empty, true)
+assert.strictEqual(M.notifyrcPairingPopupSuppressed(sup), true)
+assert.ok(sup.indexOf("[Event/pairingRequest]") !== -1)
+// round-trip back to enabled removes our section entirely
+var unsup = M.notifyrcSetPairingPopupSuppressed(sup, false)
+assert.strictEqual(M.notifyrcPairingPopupSuppressed(unsup), false)
+assert.strictEqual(unsup.indexOf("[Event/pairingRequest]"), -1)
+// preserves unrelated sections byte-for-byte
+var existing = "[Event/other]\nAction=Popup\nSound=on\n"
+var sup2 = M.notifyrcSetPairingPopupSuppressed(existing, true)
+assert.ok(sup2.indexOf("[Event/other]\nAction=Popup\nSound=on") !== -1)
+assert.strictEqual(M.notifyrcPairingPopupSuppressed(sup2), true)
+var unsup2 = M.notifyrcSetPairingPopupSuppressed(sup2, false)
+assert.ok(unsup2.indexOf("[Event/other]\nAction=Popup\nSound=on") !== -1)
+assert.strictEqual(M.notifyrcPairingPopupSuppressed(unsup2), false)
+// replaces an existing non-empty Action inside our section, keeps other keys
+var mixed = "[Event/pairingRequest]\nAction=Popup|Sound\nSound=hi\n"
+var sup3 = M.notifyrcSetPairingPopupSuppressed(mixed, true)
+assert.strictEqual(M.notifyrcPairingPopupSuppressed(sup3), true)
+assert.ok(sup3.indexOf("Sound=hi") !== -1)
+var unsup3 = M.notifyrcSetPairingPopupSuppressed(sup3, false)
+assert.ok(unsup3.indexOf("Sound=hi") !== -1) // section kept, only Action dropped
+assert.ok(unsup3.indexOf("[Event/pairingRequest]") !== -1)
+// Action=None also counts as suppressed
+assert.strictEqual(M.notifyrcPairingPopupSuppressed("[Event/pairingRequest]\nAction=None\n"), true)
+console.log("notifyrc tests passed")

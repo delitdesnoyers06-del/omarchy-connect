@@ -1,5 +1,7 @@
 import QtQuick
+import QtQuick.Dialogs
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
@@ -8,6 +10,23 @@ Panel {
   id: root
   moduleName: "hannibalp.kdeconnect"
   ipcTarget: "hannibalp.kdeconnect"
+  // manageIpc off so this panel owns the single IpcHandler the target
+  // permits — needed for openSettings below.
+  manageIpc: false
+
+  IpcHandler {
+    target: "hannibalp.kdeconnect"
+
+    function open() { root.open() }
+    function close() { root.close() }
+    function show() { root.open() }
+    function hide() { root.close() }
+    function toggle() { root.toggle() }
+    function openSettings() {
+      root.open()
+      root.settingsOpen = true
+    }
+  }
 
   Service {
     id: svc
@@ -67,7 +86,8 @@ Panel {
     { key: "ring", cap: "ring", icon: "\u{f009e}", label: "Ring" },
     { key: "ping", cap: "ping", icon: "\u{f0361}", label: "Ping" },
     { key: "clipboard", cap: "clipboard", icon: "\u{f014d}", label: "Clipboard" },
-    { key: "sharetext", cap: "share", icon: "\u{f048a}", label: "Text" }
+    { key: "sharetext", cap: "share", icon: "\u{f048a}", label: "Text" },
+    { key: "sharefile", cap: "share", icon: "\u{f03e2}", label: "File" }
   ]
   readonly property var hiddenActions: setting("hiddenActions", []) || []
 
@@ -92,9 +112,23 @@ Panel {
       if (shareOpen) Qt.callLater(function () { shareField.forceActiveFocus() })
       return
     }
+    if (key === "sharefile") {
+      fileDialog.open()
+      return
+    }
     if (key === "ring") svc.ring(primary.id)
     else if (key === "ping") svc.ping(primary.id)
     else if (key === "clipboard") svc.sendClipboard(primary.id)
+  }
+
+  FileDialog {
+    id: fileDialog
+    title: "Send file"
+    onAccepted: {
+      if (!root.primary) return
+      var p = decodeURIComponent(String(selectedFile).replace(/^file:\/\//, ""))
+      if (p) svc.shareFile(root.primary.id, p)
+    }
   }
 
   function sendShareText() {
@@ -120,6 +154,46 @@ Panel {
     if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
   }
 
+  // ---- bar position ----
+  readonly property string barSection: {
+    var sh = root.bar && root.bar.shell ? root.bar.shell : null
+    var cfg = sh ? sh.shellConfig : null
+    var layout = cfg && cfg.bar ? cfg.bar.layout : null
+    if (!layout) return "center"
+    var sections = ["left", "center", "right"]
+    for (var s = 0; s < sections.length; s++) {
+      var a = layout[sections[s]] || []
+      for (var i = 0; i < a.length; i++)
+        if (String((a[i] && a[i].id) || "").indexOf(root.moduleName) === 0) return sections[s]
+    }
+    return "center"
+  }
+
+  function moveToSection(name) {
+    if (!root.bar || !root.bar.shell || name === barSection) return
+    var moduleId = root.moduleName
+    root.bar.shell.mutateShellConfig(function (cfg) {
+      if (!cfg.bar) cfg.bar = {}
+      if (!cfg.bar.layout) cfg.bar.layout = {}
+      var layout = cfg.bar.layout
+      var entry = null
+      var sections = ["left", "center", "right"]
+      for (var s = 0; s < sections.length; s++) {
+        var a = layout[sections[s]] || []
+        for (var i = 0; i < a.length; i++) {
+          if (String((a[i] && a[i].id) || "").indexOf(moduleId) === 0) {
+            entry = a[i]
+            a.splice(i, 1)
+            break
+          }
+        }
+      }
+      if (!entry) entry = { id: moduleId }
+      if (!layout[name]) layout[name] = []
+      layout[name].push(entry)
+    })
+  }
+
   readonly property string actionStatusText: {
     var a = svc.action
     if (a.status === "idle") return ""
@@ -130,11 +204,13 @@ Panel {
       if (a.kind === "ring") return "Ringing " + name + "…"
       if (a.kind === "ping") return "Pinging " + name + "…"
       if (a.kind === "sharetext") return "Sending text…"
+      if (a.kind === "sharefile") return "Sending file…"
       return "Sending clipboard…"
     }
     if (a.status === "failed") return "Action failed"
     if (a.kind === "clipboard") return "Clipboard sent"
     if (a.kind === "sharetext") return "Text sent"
+    if (a.kind === "sharefile") return "File sent"
     return "Done"
   }
 
@@ -631,14 +707,16 @@ Panel {
         }
 
         // ---------- actions ----------
-        Row {
+        // Up to 3 per row; more actions wrap onto extra rows with equal cell
+        // widths instead of squeezing the labels.
+        Grid {
           id: actionsRow
           visible: root.actionDefs.length > 0
           width: parent.width
-          spacing: Style.space(6)
-          readonly property real cellWidth: root.actionDefs.length > 0
-            ? (width - spacing * (root.actionDefs.length - 1)) / root.actionDefs.length
-            : 0
+          columnSpacing: Style.space(6)
+          rowSpacing: Style.space(6)
+          columns: Math.max(1, Math.min(3, root.actionDefs.length))
+          readonly property real cellWidth: (width - columnSpacing * (columns - 1)) / columns
 
           Repeater {
             model: root.actionDefs
@@ -759,12 +837,43 @@ Panel {
             Toggle {
               required property var modelData
               width: parent.width
-              label: modelData.label === "Text" ? "Share text" : modelData.label
+              label: modelData.label === "Text" ? "Share text"
+                : modelData.label === "File" ? "Share file" : modelData.label
               checked: root.hiddenActions.indexOf(modelData.key) === -1
               foreground: root.fg
               fontFamily: root.ff
               onClicked: root.toggleHiddenAction(modelData.key)
             }
+          }
+
+          Toggle {
+            width: parent.width
+            label: "System pairing popup"
+            description: "The panel already shows pairing requests"
+            checked: !svc.pairPopupSuppressed
+            foreground: root.fg
+            fontFamily: root.ff
+            onClicked: svc.setPairPopupSuppressed(!svc.pairPopupSuppressed)
+          }
+
+          PanelSectionHeader {
+            text: "BAR POSITION"
+            foreground: root.fg
+            fontFamily: root.ff
+          }
+
+          ButtonGroup {
+            options: [
+              { value: "left", label: "Left" },
+              { value: "center", label: "Center" },
+              { value: "right", label: "Right" }
+            ]
+            value: root.barSection
+            foreground: root.fg
+            fontFamily: root.ff
+            fontSize: Style.font.bodySmall
+            focusable: false
+            onChanged: function (value) { root.moveToSection(value) }
           }
         }
       }
