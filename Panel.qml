@@ -215,7 +215,7 @@ Panel {
   }
 
   function copyInstallCommand() {
-    Quickshell.execDetached(["wl-copy", "sudo pacman -S kdeconnect"])
+    Quickshell.execDetached(["wl-copy", "omarchy-pkg-add kdeconnect"])
   }
 
   // ---- two-step unpair confirmation ----
@@ -496,7 +496,7 @@ Panel {
           Button {
             width: parent.width
             iconText: "\u{f014d}"
-            text: "Copy:  sudo pacman -S kdeconnect"
+            text: "Copy:  omarchy-pkg-add kdeconnect"
             fontSize: Style.font.bodySmall
             foreground: root.fg
             fontFamily: root.ff

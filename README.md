@@ -36,11 +36,15 @@ Omarchy's native notification, clipboard and media surfaces.
 ## Requirements
 
 Omarchy Connect is a frontend for KDE Connect, so KDE Connect must be installed
-on this machine:
+on this machine. `kdeconnect` is in the official Arch `extra` repo; install it
+with Omarchy's package helper:
 
 ```bash
-sudo pacman -S --needed kdeconnect
+omarchy-pkg-add kdeconnect
 ```
+
+(`omarchy-pkg-add` wraps `pacman -S --needed` with sudo handling — no AUR
+needed. Plain `sudo pacman -S kdeconnect` works too.)
 
 `busctl` (from systemd) and Quattro's `omarchy-shell` are already part of
 Omarchy — nothing else to install on the desktop.
