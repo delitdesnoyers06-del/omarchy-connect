@@ -367,7 +367,7 @@ Panel {
 
           PanelSectionHeader {
             id: headerText
-            text: "KDE CONNECT"
+            text: "OMARCHY CONNECT"
             foreground: root.fg
             fontFamily: root.ff
             anchors.left: parent.left
