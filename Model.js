@@ -267,27 +267,46 @@ function notifyrcPairingPopupSuppressed(text) {
   return false
 }
 
-function notifyrcSetPairingPopupSuppressed(text, suppressed) {
+// Reads the current Action state of the pairingRequest section, so a caller
+// can save it before overriding and restore the exact value later.
+// Returns { hadSection: bool, action: string|null } — action is the raw
+// value ("Popup|Sound", "", "None", ...), null when no Action line exists.
+function notifyrcGetPairingAction(text) {
   var lines = String(text || "").split("\n")
   var range = _notifyrcSectionRange(lines)
-  if (suppressed) {
+  if (!range) return { hadSection: false, action: null }
+  for (var i = range.start + 1; i < range.end; i++) {
+    var m = lines[i].match(/^Action\s*=\s*(.*)$/)
+    if (m) return { hadSection: true, action: m[1].trim() }
+  }
+  return { hadSection: true, action: null }
+}
+
+// Sets the pairingRequest Action to an exact value. action as a string
+// ("" suppresses, "Popup|Sound" restores a custom value) writes/replaces the
+// line, creating the section if needed. action === null removes the Action
+// line, dropping the section only when nothing else remains in it. All other
+// content is preserved byte-for-byte.
+function notifyrcSetPairingAction(text, action) {
+  var lines = String(text || "").split("\n")
+  var range = _notifyrcSectionRange(lines)
+  if (action !== null && action !== undefined) {
+    var line = "Action=" + String(action)
     if (range) {
-      // Replace an existing Action line, or add one under the header.
       for (var i = range.start + 1; i < range.end; i++) {
         if (/^Action\s*=/.test(lines[i])) {
-          lines[i] = "Action="
+          lines[i] = line
           return lines.join("\n")
         }
       }
-      lines.splice(range.start + 1, 0, "Action=")
+      lines.splice(range.start + 1, 0, line)
       return lines.join("\n")
     }
     var out = lines.join("\n")
     if (out.length > 0 && !/\n$/.test(out)) out += "\n"
-    return out + NOTIFYRC_SECTION + "\nAction=\n"
+    return out + NOTIFYRC_SECTION + "\n" + line + "\n"
   }
   if (!range) return lines.join("\n")
-  // Drop our Action override; drop the whole section if nothing else in it.
   var kept = []
   var hasOther = false
   for (var k = range.start + 1; k < range.end; k++) {
@@ -345,6 +364,7 @@ if (typeof module !== "undefined") {
     statusLine: statusLine,
     formatVerificationKey: formatVerificationKey,
     notifyrcPairingPopupSuppressed: notifyrcPairingPopupSuppressed,
-    notifyrcSetPairingPopupSuppressed: notifyrcSetPairingPopupSuppressed
+    notifyrcGetPairingAction: notifyrcGetPairingAction,
+    notifyrcSetPairingAction: notifyrcSetPairingAction
   }
 }

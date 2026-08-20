@@ -25,14 +25,94 @@ Panel {
       root.open()
       root.settingsOpen = true
     }
+    // Same code path as the settings toggle; scriptable for testing.
+    function setPairingPopupSuppression(on: bool) {
+      root.setSuppressPairingPopup(on)
+    }
   }
 
   Service {
     id: svc
     preferredDeviceId: root.setting("preferredDevice", "")
-    // Opt-in: off by default so the plugin never touches kdeconnect.notifyrc
-    // until the user explicitly asks to suppress the duplicate popup.
-    suppressPairingPopup: root.setting("suppressPairingPopup", false) === true
+  }
+
+  // ---- pairing-popup suppression (opt-in, value-preserving) ----
+  // KNotification's own pairingRequest popup duplicates the panel's pairing
+  // card; an opt-in setting suppresses it via ~/.config/kdeconnect.notifyrc.
+  // Contract (marketplace review): the file is written ONLY on the explicit
+  // toggle, plus a restore/re-apply pair around widget unload/load while the
+  // opt-in stands. The user's pre-existing Action value is saved in plugin
+  // settings before overriding and restored exactly on disable; a suppression
+  // the user configured themselves is marked preexisting and never modified
+  // in either direction.
+  readonly property bool suppressPairingPopup: setting("suppressPairingPopup", false) === true
+  readonly property var pairPopupSaved: setting("pairPopupSaved", null)
+  property bool notifyrcReady: false
+
+  function _notifyrcText() {
+    try { return notifyrcFile.text() || "" } catch (e) { return "" }
+  }
+
+  function _persistPairPopup(on, saved) {
+    var next = {}
+    for (var k in root.settings) if (k !== "pairPopupSaved") next[k] = root.settings[k]
+    next.suppressPairingPopup = on
+    if (saved !== null) next.pairPopupSaved = saved
+    root.settings = next
+    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
+  }
+
+  function setSuppressPairingPopup(on) {
+    var current = _notifyrcText()
+    if (on) {
+      if (Model.notifyrcPairingPopupSuppressed(current)) {
+        // Already suppressed by the user's own config — never touch it.
+        _persistPairPopup(true, { preexisting: true })
+      } else {
+        var orig = Model.notifyrcGetPairingAction(current)
+        _persistPairPopup(true, { preexisting: false, action: orig.action })
+        notifyrcFile.setText(Model.notifyrcSetPairingAction(current, ""))
+      }
+    } else {
+      var s = pairPopupSaved
+      if (s && s.preexisting !== true && Model.notifyrcPairingPopupSuppressed(current))
+        notifyrcFile.setText(Model.notifyrcSetPairingAction(current, s.action === undefined ? null : s.action))
+      _persistPairPopup(false, null)
+    }
+  }
+
+  // Re-apply an earlier opt-in after the restore-on-unload below (shell
+  // restarts unload and reload the widget). Idempotent; never acts on the
+  // default or on a preexisting user suppression.
+  function _reapplyPairPopup() {
+    if (!suppressPairingPopup) return
+    var s = pairPopupSaved
+    if (!s || s.preexisting === true) return
+    var current = _notifyrcText()
+    if (!Model.notifyrcPairingPopupSuppressed(current))
+      notifyrcFile.setText(Model.notifyrcSetPairingAction(current, ""))
+  }
+
+  FileView {
+    id: notifyrcFile
+    path: Quickshell.env("HOME") + "/.config/kdeconnect.notifyrc"
+    printErrors: false
+    atomicWrites: true
+    watchChanges: true
+    onLoaded: { root.notifyrcReady = true; root._reapplyPairPopup() }
+    onLoadFailed: { root.notifyrcReady = true; root._reapplyPairPopup() }
+    onFileChanged: reload()
+  }
+
+  // Restore the exact saved Action on unload (disable/remove/shell restart),
+  // so a departing plugin never leaves pairing requests silently suppressed.
+  Component.onDestruction: {
+    if (!notifyrcReady || !suppressPairingPopup) return
+    var s = pairPopupSaved
+    if (!s || s.preexisting === true) return
+    var current = _notifyrcText()
+    if (Model.notifyrcPairingPopupSuppressed(current))
+      notifyrcFile.setText(Model.notifyrcSetPairingAction(current, s.action === undefined ? null : s.action))
   }
 
   // ---- derived state ----
@@ -135,11 +215,6 @@ Panel {
 
   function togglePercentage() {
     root.settings = Object.assign({}, root.settings, { showPercentage: !root.showPercentage })
-    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
-  }
-
-  function setSuppressPairingPopup(on) {
-    root.settings = Object.assign({}, root.settings, { suppressPairingPopup: on })
     if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
   }
 
@@ -845,10 +920,10 @@ Panel {
             width: parent.width
             label: "KDE system pairing popup"
             description: "Off: only this panel shows pairing requests"
-            checked: !svc.suppressPairingPopup
+            checked: !root.suppressPairingPopup
             foreground: root.fg
             fontFamily: root.ff
-            onClicked: root.setSuppressPairingPopup(svc.suppressPairingPopup ? false : true)
+            onClicked: root.setSuppressPairingPopup(!root.suppressPairingPopup)
           }
 
           PanelSectionHeader {

@@ -161,31 +161,38 @@ assert.ok(liveDev.caps.ping && liveDev.caps.ring && liveDev.caps.clipboard)
 console.log("battery fixture tests passed")
 
 // ---- notifyrc pairing-popup override ----
-var empty = ""
-assert.strictEqual(M.notifyrcPairingPopupSuppressed(empty), false)
-var sup = M.notifyrcSetPairingPopupSuppressed(empty, true)
+// Regression cases from marketplace review: never lose a user's own
+// pre-existing Action value; restore the exact original on disable.
+assert.deepStrictEqual(M.notifyrcGetPairingAction(""), { hadSection: false, action: null })
+assert.deepStrictEqual(M.notifyrcGetPairingAction("[Event/pairingRequest]\nSound=hi\n"), { hadSection: true, action: null })
+assert.deepStrictEqual(M.notifyrcGetPairingAction("[Event/pairingRequest]\nAction=Popup|Sound\n"), { hadSection: true, action: "Popup|Sound" })
+assert.deepStrictEqual(M.notifyrcGetPairingAction("[Event/pairingRequest]\nAction=None\n"), { hadSection: true, action: "None" })
+
+// suppress from empty file, then remove → file back to empty
+var sup = M.notifyrcSetPairingAction("", "")
 assert.strictEqual(M.notifyrcPairingPopupSuppressed(sup), true)
-assert.ok(sup.indexOf("[Event/pairingRequest]") !== -1)
-// round-trip back to enabled removes our section entirely
-var unsup = M.notifyrcSetPairingPopupSuppressed(sup, false)
-assert.strictEqual(M.notifyrcPairingPopupSuppressed(unsup), false)
-assert.strictEqual(unsup.indexOf("[Event/pairingRequest]"), -1)
-// preserves unrelated sections byte-for-byte
-var existing = "[Event/other]\nAction=Popup\nSound=on\n"
-var sup2 = M.notifyrcSetPairingPopupSuppressed(existing, true)
-assert.ok(sup2.indexOf("[Event/other]\nAction=Popup\nSound=on") !== -1)
+assert.strictEqual(M.notifyrcSetPairingAction(sup, null).indexOf("[Event/pairingRequest]"), -1)
+
+// custom Action round-trip: save → suppress → restore EXACT original
+var custom = "[Event/other]\nAction=Popup\n[Event/pairingRequest]\nAction=Popup|Sound\nSound=hi\n"
+var saved = M.notifyrcGetPairingAction(custom)
+assert.strictEqual(saved.action, "Popup|Sound")
+var sup2 = M.notifyrcSetPairingAction(custom, "")
 assert.strictEqual(M.notifyrcPairingPopupSuppressed(sup2), true)
-var unsup2 = M.notifyrcSetPairingPopupSuppressed(sup2, false)
-assert.ok(unsup2.indexOf("[Event/other]\nAction=Popup\nSound=on") !== -1)
-assert.strictEqual(M.notifyrcPairingPopupSuppressed(unsup2), false)
-// replaces an existing non-empty Action inside our section, keeps other keys
-var mixed = "[Event/pairingRequest]\nAction=Popup|Sound\nSound=hi\n"
-var sup3 = M.notifyrcSetPairingPopupSuppressed(mixed, true)
+assert.ok(sup2.indexOf("Sound=hi") !== -1 && sup2.indexOf("[Event/other]\nAction=Popup") !== -1)
+var restored = M.notifyrcSetPairingAction(sup2, saved.action)
+assert.strictEqual(restored, custom.replace(/\n$/, "") + (custom.endsWith("\n") ? "\n" : ""))
+
+// section-without-Action round-trip: suppress adds line, restore(null) removes it, section kept
+var noAction = "[Event/pairingRequest]\nSound=hi\n"
+var saved2 = M.notifyrcGetPairingAction(noAction)
+assert.strictEqual(saved2.action, null)
+var sup3 = M.notifyrcSetPairingAction(noAction, "")
 assert.strictEqual(M.notifyrcPairingPopupSuppressed(sup3), true)
-assert.ok(sup3.indexOf("Sound=hi") !== -1)
-var unsup3 = M.notifyrcSetPairingPopupSuppressed(sup3, false)
-assert.ok(unsup3.indexOf("Sound=hi") !== -1) // section kept, only Action dropped
-assert.ok(unsup3.indexOf("[Event/pairingRequest]") !== -1)
-// Action=None also counts as suppressed
+var restored2 = M.notifyrcSetPairingAction(sup3, saved2.action)
+assert.ok(restored2.indexOf("Sound=hi") !== -1 && !/Action\s*=/.test(restored2))
+assert.ok(restored2.indexOf("[Event/pairingRequest]") !== -1)
+
+// Action=None counts as suppressed (pre-existing user suppression detectable)
 assert.strictEqual(M.notifyrcPairingPopupSuppressed("[Event/pairingRequest]\nAction=None\n"), true)
 console.log("notifyrc tests passed")

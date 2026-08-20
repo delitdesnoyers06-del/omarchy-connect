@@ -192,50 +192,6 @@ Item {
     onTriggered: root.action = { kind: "", deviceId: "", status: "idle" }
   }
 
-  // ---- pairing-popup suppression ----
-  // The panel owns the pairing flow, so KNotification's own pairingRequest
-  // popup is a duplicate. suppressPairingPopup is the user's preference
-  // (owned by Panel via plugin settings, default false = opt-in); the
-  // notifyrc file is just the mechanism, reconciled to match. With the
-  // default the file is never written. Only that one event is ever touched —
-  // synced phone notifications are unaffected.
-  property bool suppressPairingPopup: false
-  property bool _notifyrcLoaded: false
-
-  onSuppressPairingPopupChanged: _reconcilePairPopup()
-
-  function _reconcilePairPopup() {
-    if (!_notifyrcLoaded) return
-    var current = ""
-    try { current = notifyrcFile.text() || "" } catch (e) { current = "" }
-    if (Model.notifyrcPairingPopupSuppressed(current) === suppressPairingPopup) return
-    notifyrcFile.setText(Model.notifyrcSetPairingPopupSuppressed(current, suppressPairingPopup))
-  }
-
-  FileView {
-    id: notifyrcFile
-    path: Quickshell.env("HOME") + "/.config/kdeconnect.notifyrc"
-    printErrors: false
-    atomicWrites: true
-    watchChanges: true
-    onLoaded: { root._notifyrcLoaded = true; root._reconcilePairPopup() }
-    onLoadFailed: { root._notifyrcLoaded = true; root._reconcilePairPopup() }
-    onFileChanged: reload()
-  }
-
-  // Restore the system popup when the plugin unloads (disable/remove/reload),
-  // so a departing plugin never leaves pairing requests silently suppressed
-  // with no UI left to re-enable them. On the next load reconcile re-applies
-  // the preference — a brief popup-enabled window across a restart is
-  // acceptable given how rare pairing events are.
-  Component.onDestruction: {
-    if (!_notifyrcLoaded) return
-    var current = ""
-    try { current = notifyrcFile.text() || "" } catch (e) { current = "" }
-    if (Model.notifyrcPairingPopupSuppressed(current))
-      notifyrcFile.setText(Model.notifyrcSetPairingPopupSuppressed(current, false))
-  }
-
   // ---- event-driven invalidation ----
   Connections {
     target: dbus
