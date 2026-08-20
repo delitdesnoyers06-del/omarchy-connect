@@ -7,14 +7,14 @@ import "Model.js" as Model
 
 Panel {
   id: root
-  moduleName: "hannibalp.kdeconnect"
-  ipcTarget: "hannibalp.kdeconnect"
+  moduleName: "seb-krz.omarchy-connect"
+  ipcTarget: "seb-krz.omarchy-connect"
   // manageIpc off so this panel owns the single IpcHandler the target
   // permits — needed for openSettings below.
   manageIpc: false
 
   IpcHandler {
-    target: "hannibalp.kdeconnect"
+    target: "seb-krz.omarchy-connect"
 
     function open() { root.open() }
     function close() { root.close() }

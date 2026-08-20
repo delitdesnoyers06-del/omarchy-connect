@@ -4,6 +4,6 @@
 # including the QML component cache clear.
 set -e
 src="$(cd "$(dirname "$0")" && pwd)"
-dst="$HOME/.config/omarchy/plugins/hannibalp.kdeconnect"
+dst="$HOME/.config/omarchy/plugins/seb-krz.omarchy-connect"
 mkdir -p "$dst"
 cp "$src"/manifest.json "$src"/Panel.qml "$src"/Service.qml "$src"/Dbus.qml "$src"/Model.js "$src"/README.md "$src"/LICENSE "$dst"/

@@ -66,12 +66,12 @@ rules itself).
 omarchy plugin add https://github.com/seb-krz/omarchy-connect.git --enable
 ```
 
-This clones the plugin into `~/.config/omarchy/plugins/hannibalp.kdeconnect/`
+This clones the plugin into `~/.config/omarchy/plugins/seb-krz.omarchy-connect/`
 and adds it to the bar. If you omit `--enable`, enable it later from the bar's
 widget picker or with:
 
 ```bash
-omarchy plugin enable hannibalp.kdeconnect
+omarchy plugin enable seb-krz.omarchy-connect
 ```
 
 ## Usage
@@ -106,8 +106,8 @@ Settings persist in `~/.config/omarchy/shell.json` under the plugin's entry.
 ## Removal
 
 ```bash
-omarchy plugin disable hannibalp.kdeconnect   # remove from the bar
-omarchy plugin remove hannibalp.kdeconnect    # delete the plugin
+omarchy plugin disable seb-krz.omarchy-connect   # remove from the bar
+omarchy plugin remove seb-krz.omarchy-connect    # delete the plugin
 ```
 
 Disabling restores KDE's system pairing popup automatically, so nothing is left
