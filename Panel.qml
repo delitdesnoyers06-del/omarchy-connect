@@ -30,6 +30,8 @@ Panel {
   Service {
     id: svc
     preferredDeviceId: root.setting("preferredDevice", "")
+    // Default: the panel owns pairing, so the KDE system popup is off.
+    suppressPairingPopup: root.setting("suppressPairingPopup", true) === true
   }
 
   // ---- derived state ----
@@ -132,6 +134,11 @@ Panel {
 
   function togglePercentage() {
     root.settings = Object.assign({}, root.settings, { showPercentage: !root.showPercentage })
+    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
+  }
+
+  function setSuppressPairingPopup(on) {
+    root.settings = Object.assign({}, root.settings, { suppressPairingPopup: on })
     if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
   }
 
@@ -835,12 +842,12 @@ Panel {
 
           Toggle {
             width: parent.width
-            label: "System pairing popup"
-            description: "The panel already shows pairing requests"
-            checked: !svc.pairPopupSuppressed
+            label: "KDE system pairing popup"
+            description: "Off: only this panel shows pairing requests"
+            checked: !svc.suppressPairingPopup
             foreground: root.fg
             fontFamily: root.ff
-            onClicked: svc.setPairPopupSuppressed(!svc.pairPopupSuppressed)
+            onClicked: root.setSuppressPairingPopup(svc.suppressPairingPopup ? false : true)
           }
 
           PanelSectionHeader {
