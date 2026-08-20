@@ -17,8 +17,8 @@ Plasma or a separate KDE Connect frontend.
 - **Multi-device** — primary-device precedence with a persisted preference,
   correct behaviour when devices disappear and return.
 - **Native pairing** — incoming and outgoing requests with verification-key
-  display, accept/reject from the panel. Optionally suppresses KDE's duplicate
-  system pairing popup so the panel owns the flow.
+  display, accept/reject from the panel. Can optionally suppress KDE's duplicate
+  system pairing popup (opt-in) so the panel owns the flow.
 - **Battery + charging** in the bar and panel when the device supports it.
 - **Find Device, Ping, Send Clipboard, Share Text** — capability-driven:
   actions appear only when the device's KDE Connect plugins provide them, and
@@ -96,8 +96,9 @@ Open the panel and click the gear icon. You can:
 
 - toggle **battery percentage in the bar**;
 - **show or hide individual actions** (Ring, Ping, Clipboard, Share Text);
-- turn KDE's **system pairing popup** back on (off by default — the panel shows
-  pairing requests, so the duplicate notification is suppressed);
+- **suppress KDE's system pairing popup** (opt-in, off by default) so only the
+  panel shows pairing requests — enabling it writes one scoped, reversible line
+  to `~/.config/kdeconnect.notifyrc`, removed automatically on disable;
 - move the widget to the **left, center or right** of the bar.
 
 Settings persist in `~/.config/omarchy/shell.json` under the plugin's entry.

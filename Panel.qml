@@ -30,8 +30,9 @@ Panel {
   Service {
     id: svc
     preferredDeviceId: root.setting("preferredDevice", "")
-    // Default: the panel owns pairing, so the KDE system popup is off.
-    suppressPairingPopup: root.setting("suppressPairingPopup", true) === true
+    // Opt-in: off by default so the plugin never touches kdeconnect.notifyrc
+    // until the user explicitly asks to suppress the duplicate popup.
+    suppressPairingPopup: root.setting("suppressPairingPopup", false) === true
   }
 
   // ---- derived state ----

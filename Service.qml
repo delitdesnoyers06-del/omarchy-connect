@@ -195,10 +195,11 @@ Item {
   // ---- pairing-popup suppression ----
   // The panel owns the pairing flow, so KNotification's own pairingRequest
   // popup is a duplicate. suppressPairingPopup is the user's preference
-  // (owned by Panel via plugin settings, default true); the notifyrc file is
-  // just the mechanism, reconciled to match. Only that one event is touched —
+  // (owned by Panel via plugin settings, default false = opt-in); the
+  // notifyrc file is just the mechanism, reconciled to match. With the
+  // default the file is never written. Only that one event is ever touched —
   // synced phone notifications are unaffected.
-  property bool suppressPairingPopup: true
+  property bool suppressPairingPopup: false
   property bool _notifyrcLoaded: false
 
   onSuppressPairingPopupChanged: _reconcilePairPopup()
