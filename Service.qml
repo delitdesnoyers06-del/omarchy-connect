@@ -142,6 +142,8 @@ Item {
   function ring(id) { _cliAction("ring", id, ["kdeconnect-cli", "--ring", "--device", id]) }
   function ping(id) { _cliAction("ping", id, ["kdeconnect-cli", "--ping", "--device", id]) }
   function sendClipboard(id) { _cliAction("clipboard", id, ["kdeconnect-cli", "--send-clipboard", "--device", id]) }
+  // text is user input passed as a single argv element — never a shell string.
+  function shareText(id, text) { _cliAction("sharetext", id, ["kdeconnect-cli", "--share-text", text, "--device", id]) }
 
   function rediscover() {
     dbus.call(_daemonCall("forceOnNetworkChange"), function () { refresh() })

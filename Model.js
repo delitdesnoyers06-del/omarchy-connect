@@ -192,7 +192,9 @@ function makeMonitorFilter() {
 var DEVICE_GLYPHS = {
   smartphone: "\u{f011c}", // 󰄜 cellphone
   phone: "\u{f011c}",
-  tablet: "\u{f04f6}",     // 󰓶
+  // The landscape tablet glyph reads as a sideways phone at bar size, and
+  // KDE Connect reports many phones as "tablet" — use the portrait glyph.
+  tablet: "\u{f011c}",
   laptop: "\u{f0322}",     // 󰌢
   desktop: "\u{f07c0}",    // 󰟀
   tv: "\u{f0502}"          // 󰔂 television

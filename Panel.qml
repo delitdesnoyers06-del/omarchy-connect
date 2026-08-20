@@ -59,22 +59,65 @@ Panel {
     return lines.join("\n")
   }
 
-  // ---- actions (capability-driven) ----
+  // ---- actions (capability-driven, user-hideable) ----
+  // Every action this plugin can offer; the settings card lists these, the
+  // action row shows the intersection with device capabilities and the
+  // user's hiddenActions preference.
+  readonly property var allActions: [
+    { key: "ring", cap: "ring", icon: "\u{f009e}", label: "Ring" },
+    { key: "ping", cap: "ping", icon: "\u{f0361}", label: "Ping" },
+    { key: "clipboard", cap: "clipboard", icon: "\u{f014d}", label: "Clipboard" },
+    { key: "sharetext", cap: "share", icon: "\u{f048a}", label: "Text" }
+  ]
+  readonly property var hiddenActions: setting("hiddenActions", []) || []
+
   readonly property var actionDefs: {
     var d = primary
     if (!d || !d.connected || !backendReady) return []
     var list = []
-    if (d.caps.ring) list.push({ key: "ring", icon: "\u{f009e}", label: "Ring" })
-    if (d.caps.ping) list.push({ key: "ping", icon: "\u{f0361}", label: "Ping" })
-    if (d.caps.clipboard) list.push({ key: "clipboard", icon: "\u{f014d}", label: "Clipboard" })
+    for (var i = 0; i < allActions.length; i++) {
+      var a = allActions[i]
+      if (d.caps[a.cap] && hiddenActions.indexOf(a.key) === -1) list.push(a)
+    }
     return list
   }
 
+  property bool shareOpen: false
+  property bool settingsOpen: false
+
   function runAction(key) {
     if (!primary) return
+    if (key === "sharetext") {
+      shareOpen = !shareOpen
+      if (shareOpen) Qt.callLater(function () { shareField.forceActiveFocus() })
+      return
+    }
     if (key === "ring") svc.ring(primary.id)
     else if (key === "ping") svc.ping(primary.id)
     else if (key === "clipboard") svc.sendClipboard(primary.id)
+  }
+
+  function sendShareText() {
+    var t = shareField.text
+    if (!t || !primary) return
+    svc.shareText(primary.id, t)
+    shareField.text = ""
+    shareOpen = false
+    keyCatcher.forceActiveFocus()
+  }
+
+  function togglePercentage() {
+    root.settings = Object.assign({}, root.settings, { showPercentage: !root.showPercentage })
+    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
+  }
+
+  function toggleHiddenAction(key) {
+    var arr = hiddenActions.slice()
+    var i = arr.indexOf(key)
+    if (i === -1) arr.push(key)
+    else arr.splice(i, 1)
+    root.settings = Object.assign({}, root.settings, { hiddenActions: arr })
+    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
   }
 
   readonly property string actionStatusText: {
@@ -86,10 +129,12 @@ Panel {
     if (a.status === "running") {
       if (a.kind === "ring") return "Ringing " + name + "…"
       if (a.kind === "ping") return "Pinging " + name + "…"
+      if (a.kind === "sharetext") return "Sending text…"
       return "Sending clipboard…"
     }
     if (a.status === "failed") return "Action failed"
     if (a.kind === "clipboard") return "Clipboard sent"
+    if (a.kind === "sharetext") return "Text sent"
     return "Done"
   }
 
@@ -196,6 +241,8 @@ Panel {
       focusSection = ""
       cursorIndex = 0
       unpairArmedId = ""
+      shareOpen = false
+      settingsOpen = false
     }
   }
 
@@ -222,12 +269,13 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(360))
+    contentWidth: panel.fittedContentWidth(Style.space(400))
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      blocked: shareField.activeFocus
       onMoveRequested: function (dx, dy) { root.moveCursor(dx, dy) }
       onActivateRequested: root.activateCursor()
       onDeleteRequested: root.deleteCursor()
@@ -256,12 +304,24 @@ Panel {
           }
 
           PanelActionButton {
+            id: settingsBtn
+            iconText: "\u{f0493}"
+            tooltipText: "Display settings"
+            foreground: root.fg
+            fontFamily: root.ff
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            onClicked: root.settingsOpen = !root.settingsOpen
+          }
+
+          PanelActionButton {
             id: refreshBtn
             iconText: "\u{f0450}"
             tooltipText: "Search for devices"
             foreground: root.fg
             fontFamily: root.ff
-            anchors.right: parent.right
+            anchors.right: settingsBtn.left
+            anchors.rightMargin: Style.space(6)
             anchors.verticalCenter: parent.verticalCenter
             onClicked: svc.rediscover()
           }
@@ -604,6 +664,36 @@ Panel {
           }
         }
 
+        // ---------- share text input ----------
+        Row {
+          visible: root.shareOpen && root.primaryConnected
+          width: parent.width
+          spacing: Style.space(6)
+
+          TextField {
+            id: shareField
+            width: parent.width - sendBtn.width - parent.spacing
+            placeholderText: "Text or URL to send"
+            foreground: root.fg
+            font.family: root.ff
+            onAccepted: root.sendShareText()
+            Keys.onEscapePressed: {
+              root.shareOpen = false
+              keyCatcher.forceActiveFocus()
+            }
+          }
+
+          PanelActionButton {
+            id: sendBtn
+            iconText: "\u{f048a}"
+            tooltipText: "Send"
+            foreground: root.fg
+            fontFamily: root.ff
+            anchors.verticalCenter: parent.verticalCenter
+            onClicked: root.sendShareText()
+          }
+        }
+
         Text {
           visible: root.actionStatusText !== ""
           width: parent.width
@@ -637,6 +727,43 @@ Panel {
               dev: modelData
               rowIndex: index
               width: parent.width
+            }
+          }
+        }
+
+        // ---------- display settings ----------
+        Column {
+          visible: root.settingsOpen
+          width: parent.width
+          spacing: Style.space(6)
+
+          PanelSeparator { foreground: root.fg }
+
+          PanelSectionHeader {
+            text: "DISPLAY"
+            foreground: root.fg
+            fontFamily: root.ff
+          }
+
+          Toggle {
+            width: parent.width
+            label: "Battery percentage in bar"
+            checked: root.showPercentage
+            foreground: root.fg
+            fontFamily: root.ff
+            onClicked: root.togglePercentage()
+          }
+
+          Repeater {
+            model: root.allActions
+            Toggle {
+              required property var modelData
+              width: parent.width
+              label: modelData.label === "Text" ? "Share text" : modelData.label
+              checked: root.hiddenActions.indexOf(modelData.key) === -1
+              foreground: root.fg
+              fontFamily: root.ff
+              onClicked: root.toggleHiddenAction(modelData.key)
             }
           }
         }
