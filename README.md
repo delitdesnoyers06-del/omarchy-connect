@@ -144,9 +144,6 @@ kdeconnectd ── session D-Bus ──┬── busctl monitor (events → debo
 - `Service.qml` — state, snapshot reconciliation, actions, pairing.
 - `Panel.qml` — bar indicator + panel presentation.
 
-See [`DesignDocument.md`](DesignDocument.md) for the full design rationale and
-architecture decisions.
-
 ## License
 
 [MIT](LICENSE) © seb-krz
