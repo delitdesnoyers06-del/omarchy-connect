@@ -187,6 +187,48 @@ function makeMonitorFilter() {
   }
 }
 
+// ---------- presentation helpers ----------
+
+var DEVICE_GLYPHS = {
+  smartphone: "\u{f011c}", // 󰄜 cellphone
+  phone: "\u{f011c}",
+  tablet: "\u{f04f6}",     // 󰓶
+  laptop: "\u{f0322}",     // 󰌢
+  desktop: "\u{f07c0}",    // 󰟀
+  tv: "\u{f0502}"          // 󰔂 television
+}
+
+function deviceGlyph(type) {
+  return DEVICE_GLYPHS[type] || DEVICE_GLYPHS.smartphone
+}
+
+// "LanLinkProvider" → "LAN", "BluetoothLinkProvider" → "Bluetooth".
+function providerLabel(providers) {
+  var p = arr(providers)
+  if (p.length === 0) return ""
+  var name = String(p[0]).replace(/LinkProvider$/, "")
+  return name.toLowerCase() === "lan" ? "LAN" : name
+}
+
+function statusLine(d) {
+  if (!d) return ""
+  if (d.connected) {
+    var via = providerLabel(d.providers)
+    return via ? "Connected via " + via : "Connected"
+  }
+  if (d.pairRequestedByPeer) return "Pairing request"
+  if (d.pairRequested) return "Pairing…"
+  if (d.pairable) return "Available nearby"
+  if (d.paired) return "Offline"
+  return "Unavailable"
+}
+
+// "82C4DD3C" → "82C4 DD3C" for readability; verification keys are short hex.
+function formatVerificationKey(key) {
+  var k = str(key).trim()
+  return k.length === 8 ? k.slice(0, 4) + " " + k.slice(4) : k
+}
+
 // ---------- backend state ----------
 
 // Distinct failure states (DesignDocument.md §24); never collapse these.
@@ -225,6 +267,10 @@ if (typeof module !== "undefined") {
     snapshotEquals: snapshotEquals,
     makeMonitorFilter: makeMonitorFilter,
     BackendState: BackendState,
-    snapshotSummary: snapshotSummary
+    snapshotSummary: snapshotSummary,
+    deviceGlyph: deviceGlyph,
+    providerLabel: providerLabel,
+    statusLine: statusLine,
+    formatVerificationKey: formatVerificationKey
   }
 }

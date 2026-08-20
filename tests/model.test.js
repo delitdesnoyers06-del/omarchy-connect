@@ -133,3 +133,18 @@ f7.feed("  Sender=org.freedesktop.DBus  Path=/org/freedesktop/DBus  Interface=or
 assert.strictEqual(f7.feed('          STRING ":1.113";'), false)
 
 console.log("all model tests passed")
+
+// ---- presentation helpers ----
+assert.strictEqual(M.deviceGlyph("smartphone"), M.deviceGlyph("phone"))
+assert.notStrictEqual(M.deviceGlyph("laptop"), M.deviceGlyph("smartphone"))
+assert.strictEqual(M.deviceGlyph("weird-future-type"), M.deviceGlyph("smartphone"))
+assert.strictEqual(M.providerLabel(["LanLinkProvider"]), "LAN")
+assert.strictEqual(M.providerLabel(["BluetoothLinkProvider"]), "Bluetooth")
+assert.strictEqual(M.providerLabel([]), "")
+assert.strictEqual(M.formatVerificationKey("82C4DD3C"), "82C4 DD3C")
+assert.strictEqual(M.formatVerificationKey(""), "")
+var connectedDev = M.normalizeDevice("x", { name: "P", isPaired: true, isReachable: true, activeProviderNames: ["LanLinkProvider"] }, [], null)
+assert.strictEqual(M.statusLine(connectedDev), "Connected via LAN")
+assert.strictEqual(M.statusLine(mini("y", "Y", false, true, false)), "Offline")
+assert.strictEqual(M.statusLine(mini("z", "Z", false, false, true)), "Available nearby")
+console.log("presentation tests passed")

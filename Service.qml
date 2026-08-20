@@ -135,6 +135,60 @@ Item {
     }
   }
 
+  // ---- actions ----
+  // One action at a time; UI shows transient status then auto-clears.
+  property var action: ({ kind: "", deviceId: "", status: "idle" })
+
+  function ring(id) { _cliAction("ring", id, ["kdeconnect-cli", "--ring", "--device", id]) }
+  function ping(id) { _cliAction("ping", id, ["kdeconnect-cli", "--ping", "--device", id]) }
+  function sendClipboard(id) { _cliAction("clipboard", id, ["kdeconnect-cli", "--send-clipboard", "--device", id]) }
+
+  function rediscover() {
+    dbus.call(_daemonCall("forceOnNetworkChange"), function () { refresh() })
+  }
+
+  // Pairing goes straight to the device D-Bus interface.
+  function requestPairing(id) { _pairCall(id, "requestPairing") }
+  function acceptPairing(id) { _pairCall(id, "acceptPairing") }
+  function cancelPairing(id) { _pairCall(id, "cancelPairing") }
+  function unpair(id) { _pairCall(id, "unpair") }
+
+  function _pairCall(id, member) {
+    dbus.call(_deviceCall(id, member), function () { refresh() })
+  }
+
+  function _cliAction(kind, id, argv) {
+    if (action.status === "running") return
+    action = { kind: kind, deviceId: id, status: "running" }
+    actionTimeout.restart()
+    actionProc.command = argv
+    actionProc.running = true
+  }
+
+  Process {
+    id: actionProc
+    onExited: function (exitCode) {
+      actionTimeout.stop()
+      root.action = Object.assign({}, root.action, { status: exitCode === 0 ? "success" : "failed" })
+      actionClear.restart()
+      root.refresh()
+    }
+  }
+
+  // A hung action is killed rather than leaving a busy UI; kill path flows
+  // through onExited with a nonzero code → "failed".
+  Timer {
+    id: actionTimeout
+    interval: 10000
+    onTriggered: actionProc.running = false
+  }
+
+  Timer {
+    id: actionClear
+    interval: 2500
+    onTriggered: root.action = { kind: "", deviceId: "", status: "idle" }
+  }
+
   // ---- event-driven invalidation ----
   Connections {
     target: dbus
