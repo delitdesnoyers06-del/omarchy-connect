@@ -63,7 +63,7 @@ rules itself).
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/hannibalp/omarchy-connect.git --enable
+omarchy plugin add https://github.com/seb-krz/omarchy-connect.git --enable
 ```
 
 This clones the plugin into `~/.config/omarchy/plugins/hannibalp.kdeconnect/`
