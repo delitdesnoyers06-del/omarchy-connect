@@ -149,4 +149,4 @@ architecture decisions.
 
 ## License
 
-[MIT](LICENSE) © hannibalp
+[MIT](LICENSE) © seb-krz

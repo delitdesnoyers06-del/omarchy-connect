@@ -3,7 +3,7 @@
   "id": "hannibalp.kdeconnect",
   "name": "Omarchy Connect",
   "version": "1.0.0",
-  "author": "hannibalp",
+  "author": "seb-krz",
   "license": "MIT",
   "description": "Native KDE Connect integration: device status, battery, pairing and actions",
   "kinds": [
