@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "hannibalp.kdeconnect",
+  "name": "Omarchy Connect",
+  "version": "0.1.0",
+  "author": "hannibalp",
+  "description": "Native KDE Connect integration: device status, battery, pairing and actions",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Omarchy Connect",
+    "description": "Native KDE Connect integration: device status, battery, pairing and actions",
+    "category": "System",
+    "allowMultiple": false
+  }
+}

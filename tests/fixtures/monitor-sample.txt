@@ -1,0 +1,54 @@
+Monitoring bus message stream.
+‣ Type=method_call  Endian=l  Flags=0  Version=1 Cookie=1  Timestamp="Thu 2026-08-20 08:52:16.058027 UTC"
+  Sender=:1.113  Destination=org.freedesktop.DBus  Path=/org/freedesktop/DBus  Interface=org.freedesktop.DBus  Member=Hello
+  UniqueName=:1.113
+  MESSAGE "" {
+  };
+
+‣ Type=method_return  Endian=l  Flags=1  Version=1 Cookie=-1  ReplyCookie=1  Timestamp="Thu 2026-08-20 08:52:16.058341 UTC"
+  Sender=org.freedesktop.DBus  Destination=:1.113
+  MESSAGE "s" {
+          STRING ":1.113";
+  };
+
+‣ Type=signal  Endian=l  Flags=1  Version=1 Cookie=-1  Timestamp="Thu 2026-08-20 08:52:16.058371 UTC"
+  Sender=org.freedesktop.DBus  Path=/org/freedesktop/DBus  Interface=org.freedesktop.DBus  Member=NameOwnerChanged
+  MESSAGE "sss" {
+          STRING ":1.113";
+          STRING "";
+          STRING ":1.113";
+  };
+
+‣ Type=signal  Endian=l  Flags=1  Version=1 Cookie=-1  Timestamp="Thu 2026-08-20 08:52:16.058389 UTC"
+  Sender=org.freedesktop.DBus  Destination=:1.113  Path=/org/freedesktop/DBus  Interface=org.freedesktop.DBus  Member=NameAcquired
+  MESSAGE "s" {
+          STRING ":1.113";
+  };
+
+‣ Type=method_call  Endian=l  Flags=4  Version=1 Cookie=2  Timestamp="Thu 2026-08-20 08:52:16.058405 UTC"
+  Sender=:1.113  Destination=org.kde.kdeconnect  Path=/modules/kdeconnect  Interface=org.kde.kdeconnect.daemon  Member=announcedName
+  UniqueName=:1.113
+  MESSAGE "" {
+  };
+
+‣ Type=method_return  Endian=l  Flags=1  Version=1 Cookie=45  ReplyCookie=2  Timestamp="Thu 2026-08-20 08:52:16.058623 UTC"
+  Sender=:1.30  Destination=:1.113
+  UniqueName=:1.30
+  MESSAGE "s" {
+          STRING "omarchy";
+  };
+
+‣ Type=signal  Endian=l  Flags=1  Version=1 Cookie=-1  Timestamp="Thu 2026-08-20 08:52:16.058821 UTC"
+  Sender=org.freedesktop.DBus  Destination=:1.113  Path=/org/freedesktop/DBus  Interface=org.freedesktop.DBus  Member=NameLost
+  MESSAGE "s" {
+          STRING ":1.113";
+  };
+
+‣ Type=signal  Endian=l  Flags=1  Version=1 Cookie=-1  Timestamp="Thu 2026-08-20 08:52:16.058854 UTC"
+  Sender=org.freedesktop.DBus  Path=/org/freedesktop/DBus  Interface=org.freedesktop.DBus  Member=NameOwnerChanged
+  MESSAGE "sss" {
+          STRING ":1.113";
+          STRING ":1.113";
+          STRING "";
+  };
+
