@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Dialogs
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -82,12 +81,17 @@ Panel {
   // Every action this plugin can offer; the settings card lists these, the
   // action row shows the intersection with device capabilities and the
   // user's hiddenActions preference.
+  // Send File is intentionally absent: a portal file picker can't be driven
+  // safely from V1's toolset. Qt's in-process FileDialog loads GTK into the
+  // shell process and crashes it (SIGABRT in gvfs/glib); pure busctl can't
+  // hold the portal request open (the ephemeral call connection drops
+  // immediately, so no Response arrives); and Quickshell exposes no generic
+  // D-Bus for a persistent connection. Deferred per DesignDocument.md §17.
   readonly property var allActions: [
     { key: "ring", cap: "ring", icon: "\u{f009e}", label: "Ring" },
     { key: "ping", cap: "ping", icon: "\u{f0361}", label: "Ping" },
     { key: "clipboard", cap: "clipboard", icon: "\u{f014d}", label: "Clipboard" },
-    { key: "sharetext", cap: "share", icon: "\u{f048a}", label: "Text" },
-    { key: "sharefile", cap: "share", icon: "\u{f03e2}", label: "File" }
+    { key: "sharetext", cap: "share", icon: "\u{f048a}", label: "Text" }
   ]
   readonly property var hiddenActions: setting("hiddenActions", []) || []
 
@@ -112,23 +116,9 @@ Panel {
       if (shareOpen) Qt.callLater(function () { shareField.forceActiveFocus() })
       return
     }
-    if (key === "sharefile") {
-      fileDialog.open()
-      return
-    }
     if (key === "ring") svc.ring(primary.id)
     else if (key === "ping") svc.ping(primary.id)
     else if (key === "clipboard") svc.sendClipboard(primary.id)
-  }
-
-  FileDialog {
-    id: fileDialog
-    title: "Send file"
-    onAccepted: {
-      if (!root.primary) return
-      var p = decodeURIComponent(String(selectedFile).replace(/^file:\/\//, ""))
-      if (p) svc.shareFile(root.primary.id, p)
-    }
   }
 
   function sendShareText() {
@@ -204,13 +194,11 @@ Panel {
       if (a.kind === "ring") return "Ringing " + name + "…"
       if (a.kind === "ping") return "Pinging " + name + "…"
       if (a.kind === "sharetext") return "Sending text…"
-      if (a.kind === "sharefile") return "Sending file…"
       return "Sending clipboard…"
     }
     if (a.status === "failed") return "Action failed"
     if (a.kind === "clipboard") return "Clipboard sent"
     if (a.kind === "sharetext") return "Text sent"
-    if (a.kind === "sharefile") return "File sent"
     return "Done"
   }
 
@@ -837,8 +825,7 @@ Panel {
             Toggle {
               required property var modelData
               width: parent.width
-              label: modelData.label === "Text" ? "Share text"
-                : modelData.label === "File" ? "Share file" : modelData.label
+              label: modelData.label === "Text" ? "Share text" : modelData.label
               checked: root.hiddenActions.indexOf(modelData.key) === -1
               foreground: root.fg
               fontFamily: root.ff

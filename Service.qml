@@ -145,7 +145,6 @@ Item {
   function sendClipboard(id) { _cliAction("clipboard", id, ["kdeconnect-cli", "--send-clipboard", "--device", id]) }
   // text is user input passed as a single argv element — never a shell string.
   function shareText(id, text) { _cliAction("sharetext", id, ["kdeconnect-cli", "--share-text", text, "--device", id]) }
-  function shareFile(id, path) { _cliAction("sharefile", id, ["kdeconnect-cli", "--share", path, "--device", id]) }
 
   function rediscover() {
     dbus.call(_daemonCall("forceOnNetworkChange"), function () { refresh() })
