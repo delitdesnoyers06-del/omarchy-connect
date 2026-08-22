@@ -154,16 +154,51 @@ function snapshotEquals(a, b) {
 //   - NameOwnerChanged whose name argument is the daemon (restart/exit).
 // Monitor lines arrive as: a "‣ Type=..." header, then a detail line with
 // Sender/Path/Interface/Member, then MESSAGE body lines.
+// Destination path out of a shareReceived STRING argument line, or null.
+// Anything that is not a plain file:// URL (a text share, a quoted name we
+// cannot unambiguously delimit) yields null and is simply not announced.
+function parseShareUrl(line) {
+  var m = String(line).match(/STRING\s+"([^"]*)"/)
+  if (!m || m[1].indexOf("file://") !== 0) return null
+  var path = m[1].substring(7)
+  try { path = decodeURIComponent(path) } catch (e) { return null }
+  return path.length > 0 ? path : null
+}
+
+function baseName(path) {
+  var p = String(path)
+  var i = p.lastIndexOf("/")
+  return i === -1 ? p : p.substring(i + 1)
+}
+
 function makeMonitorFilter() {
   return {
     inSignal: false,
     awaitingNameArg: false,
+    awaitingShareArg: false,
+    share: null,
+    // Hands over a captured destination path once, then forgets it. Read
+    // after every feed(); a share never survives into the next signal.
+    takeShare: function () {
+      var s = this.share
+      this.share = null
+      return s
+    },
     // Returns true if this line means kdeconnect state may have changed.
     feed: function (line) {
       var l = String(line)
       if (l.indexOf("Type=") !== -1) {
         this.inSignal = l.indexOf("Type=signal") !== -1
         this.awaitingNameArg = false
+        this.awaitingShareArg = false
+        return false
+      }
+      if (this.awaitingShareArg) {
+        // First STRING of shareReceived is the destination URL.
+        if (l.indexOf("STRING") !== -1) {
+          this.awaitingShareArg = false
+          this.share = parseShareUrl(l)
+        }
         return false
       }
       if (this.awaitingNameArg) {
@@ -175,6 +210,10 @@ function makeMonitorFilter() {
         return false
       }
       if (!this.inSignal || l.indexOf("Interface=") === -1) return false
+      if (l.indexOf("Member=shareReceived") !== -1) {
+        this.awaitingShareArg = true
+        return true
+      }
       if (l.indexOf("Interface=org.kde.kdeconnect") !== -1) return true
       if (l.indexOf("Interface=org.freedesktop.DBus.Properties") !== -1)
         return l.indexOf("Path=/modules/kdeconnect") !== -1
@@ -357,6 +396,8 @@ if (typeof module !== "undefined") {
     selectPrimaryId: selectPrimaryId,
     snapshotEquals: snapshotEquals,
     makeMonitorFilter: makeMonitorFilter,
+    parseShareUrl: parseShareUrl,
+    baseName: baseName,
     BackendState: BackendState,
     snapshotSummary: snapshotSummary,
     deviceGlyph: deviceGlyph,

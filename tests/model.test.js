@@ -132,6 +132,38 @@ f7.feed("‣ Type=signal ...")
 f7.feed("  Sender=org.freedesktop.DBus  Path=/org/freedesktop/DBus  Interface=org.freedesktop.DBus  Member=NameOwnerChanged")
 assert.strictEqual(f7.feed('          STRING ":1.113";'), false)
 
+// ---- shareReceived capture (fixture is real busctl output) ----
+
+var f8 = M.makeMonitorFilter()
+var dirty8 = 0
+fixture("share-received.txt").split("\n").forEach(function (line) {
+  if (f8.feed(line)) dirty8++
+})
+assert.strictEqual(f8.takeShare(), "/home/riclib/Downloads/IMG_2557.heic")
+// Reading it a second time yields nothing: a share is announced exactly once.
+assert.strictEqual(f8.takeShare(), null)
+// The arrival also invalidates state, so it still triggers a reconcile.
+assert.ok(dirty8 > 0)
+
+// Percent-encoding is undone; a name is a display string, never a path to build on.
+assert.strictEqual(
+  M.parseShareUrl('          STRING "file:///home/x/My%20Photo%20%231.png";'),
+  "/home/x/My Photo #1.png")
+// A text share carries no file:// URL and must not be announced as a file.
+assert.strictEqual(M.parseShareUrl('          STRING "some shared text";'), null)
+assert.strictEqual(M.parseShareUrl('  MESSAGE "s" {'), null)
+
+// A share never leaks across signals: a new Type= line clears the wait.
+var f9 = M.makeMonitorFilter()
+f9.feed("\u2023 Type=signal ...")
+f9.feed("  Sender=:1.1  Path=/modules/kdeconnect/devices/x/share  Interface=org.kde.kdeconnect.device.share  Member=shareReceived")
+f9.feed("\u2023 Type=signal ...")
+assert.strictEqual(f9.feed('          STRING "file:///tmp/should-not-be-captured";'), false)
+assert.strictEqual(f9.takeShare(), null)
+
+assert.strictEqual(M.baseName("/home/riclib/Downloads/IMG_2557.heic"), "IMG_2557.heic")
+assert.strictEqual(M.baseName("bare.png"), "bare.png")
+
 console.log("all model tests passed")
 
 // ---- presentation helpers ----

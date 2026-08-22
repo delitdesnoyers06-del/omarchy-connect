@@ -1,0 +1,6 @@
+‣ Type=signal  Endian=l  Flags=1  Version=1 Cookie=337  Timestamp="Sat 2026-08-22 14:34:59.614801 UTC"
+  Sender=:1.4957  Path=/modules/kdeconnect/devices/b175692d_517a_4767_b6b2_78db75c2d0bd/share  Interface=org.kde.kdeconnect.device.share  Member=shareReceived
+  UniqueName=:1.4957
+  MESSAGE "s" {
+          STRING "file:///home/riclib/Downloads/IMG_2557.heic";
+  };

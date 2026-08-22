@@ -27,6 +27,9 @@ Item {
 
   signal stateUpdated()
   signal refreshed()
+  // A file finished landing on disk. path/name are device-controlled display
+  // strings: never executed, never used to build a command.
+  signal fileReceived(string path, string name)
 
   function debugJson() {
     return Model.snapshotSummary(backendState, devices)
@@ -53,6 +56,13 @@ Item {
   function _deviceCall(id, member, extra) {
     return _busctl.concat(["call", "org.kde.kdeconnect", _devicePath(id),
       "org.kde.kdeconnect.device", member]).concat(extra || []).concat(["--json=short"])
+  }
+
+  // KDE Connect opens its own configured destination; nothing is passed in.
+  function openReceivedFolder(id) {
+    if (!id) return
+    dbus.call(_busctl.concat(["call", "org.kde.kdeconnect", _devicePath(id) + "/share",
+      "org.kde.kdeconnect.device.share", "openDestinationFolder"]))
   }
 
   function refresh() {
@@ -197,6 +207,8 @@ Item {
     target: dbus
     function onMonitorLine(line) {
       if (root._monitorFilter.feed(line)) debounceTimer.restart()
+      var share = root._monitorFilter.takeShare()
+      if (share) root.fileReceived(share, Model.baseName(share))
     }
     function onMonitorActiveChanged() {
       // Fresh parser state per monitor process; lines don't span restarts.
