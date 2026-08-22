@@ -32,17 +32,38 @@ Panel {
     // Target of the received-file notification's click. Takes no argument:
     // the folder comes from KDE Connect's own config, never from the wire.
     function openReceivedFolder() {
-      if (root.primary) svc.openReceivedFolder(root.primary.id)
+      if (root.primary && root.svc) root.svc.openReceivedFolder(root.primary.id)
     }
     function setNotifyOnReceive(on: bool) {
       root.setNotifyOnReceive(on)
     }
+    // Target of a received-file notification's click. The argument is a slot
+    // index this plugin minted, never a name off the wire; the path it maps to
+    // is handed to xdg-open as a single argv element.
+    function openReceived(slot: string) {
+      if (root.svc) root.svc.openReceivedSlot(slot)
+    }
   }
 
-  Service {
-    id: svc
-    preferredDeviceId: root.setting("preferredDevice", "")
+  // One service per session, not one per bar. The shell mounts it once
+  // (manifest declares the `service` kind) and hands the same instance to
+  // every bar widget. Instantiating it here instead gave each of N monitors
+  // its own bus monitor, its own snapshot loop, and — once arrivals became
+  // announceable — N copies of every notification.
+  readonly property var svc: bar && bar.shell && typeof bar.shell.serviceFor === "function"
+    ? bar.shell.serviceFor(root.moduleName)
+    : null
+
+  // Settings live on the bar entry, the service does not see them. Every bar
+  // pushes the same values, so this is idempotent.
+  function syncServiceSettings() {
+    if (!root.svc) return
+    root.svc.preferredDeviceId = root.setting("preferredDevice", "")
+    root.svc.notifyEnabled = root.notifyOnReceive
   }
+  onSvcChanged: root.syncServiceSettings()
+  onSettingsChanged: root.syncServiceSettings()
+  Component.onCompleted: root.syncServiceSettings()
 
   // ---- pairing-popup suppression (opt-in, value-preserving) ----
   // KNotification's own pairingRequest popup duplicates the panel's pairing
@@ -200,90 +221,14 @@ Panel {
   property bool shareOpen: false
   property bool settingsOpen: false
 
-  // ---- received-file notification (§ share) ----
-  // KDE Connect announces a finished transfer on D-Bus but never notifies:
-  // notifyrc has no fileReceived event, and the KJob it does raise needs a
-  // Plasma job tracker, which Quattro is not. So the panel announces it.
-  //
-  // The name is device-controlled, so it is only ever a single argv element
-  // and a display string — never part of a command. The click action carries
-  // no device data at all: it re-enters this plugin over IPC.
+  // ---- received-file notification ----
+  // The announcement itself lives in the service, which exists once; this
+  // panel only owns the setting that gates it. See Service.qml.
   readonly property bool notifyOnReceive: setting("notifyOnReceive", true)
-  readonly property var imageExtensions: ["jpg", "jpeg", "png", "gif", "webp",
-    "heic", "heif", "avif", "bmp", "tif", "tiff"]
-  // Slots rather than unique names: bounded, needs no cleanup, and survives
-  // several arrivals staying on screen at once.
-  readonly property int thumbSlots: 8
-  property int thumbSlot: 0
-  property var pendingNotify: null
 
   function setNotifyOnReceive(on) {
     root.settings = Object.assign({}, root.settings, { notifyOnReceive: !!on })
     if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
-  }
-
-  function isImageName(name) {
-    var i = String(name).lastIndexOf(".")
-    if (i === -1) return false
-    return root.imageExtensions.indexOf(String(name).substring(i + 1).toLowerCase()) !== -1
-  }
-
-  function sendReceivedNotification(name, image) {
-    var argv = ["omarchy-notification-send", "--app-name", "omarchy-connect",
-      "-g", "\u{f01da}", "-u", "normal",
-      "--exec", "omarchy-shell seb-krz.omarchy-connect openReceivedFolder"]
-    if (image) argv = argv.concat(["--image", image])
-    // Headline then description, both after the options: the name lands as
-    // one argv element and is never reparsed.
-    notifyProc.command = argv.concat(["File received", name])
-    notifyProc.running = true
-  }
-
-  Connections {
-    target: svc
-    function onFileReceived(path, name) {
-      if (!root.notifyOnReceive) return
-      if (!root.isImageName(name)) {
-        root.sendReceivedNotification(name, "")
-        return
-      }
-      // Quattro's Qt build has no HEIF decoder, and phone photos are HEIC,
-      // so the popup gets a transcoded thumbnail rather than the original.
-      root.thumbSlot = (root.thumbSlot + 1) % root.thumbSlots
-      var dst = root.thumbDir + "/omarchy-connect-thumb-" + root.thumbSlot + ".png"
-      root.pendingNotify = { name: name, image: dst }
-      thumbProc.running = false
-      thumbProc.command = ["magick", path + "[0]", "-auto-orient",
-        "-thumbnail", "256x256", "-strip", dst]
-      thumbProc.running = true
-      thumbTimer.restart()
-    }
-  }
-
-  // Straight into the runtime dir, which always exists and is cleared at
-  // logout — no directory to create, and nothing to clean up.
-  readonly property string thumbDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
-
-  Process { id: notifyProc }
-
-  Process {
-    id: thumbProc
-    // Any failure — no ImageMagick, an unreadable file, a multi-frame image
-    // that wrote elsewhere — degrades to a notification with no thumbnail.
-    onExited: function (exitCode) {
-      thumbTimer.stop()
-      var p = root.pendingNotify
-      root.pendingNotify = null
-      if (!p) return
-      root.sendReceivedNotification(p.name, exitCode === 0 ? p.image : "")
-    }
-  }
-
-  // A transcode that stalls must not leave the arrival unannounced.
-  Timer {
-    id: thumbTimer
-    interval: 8000
-    onTriggered: thumbProc.running = false
   }
 
   function runAction(key) {

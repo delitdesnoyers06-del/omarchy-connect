@@ -239,6 +239,104 @@ Item {
     }
   }
 
+  // ---- received-file announcement ----
+  // KDE Connect never announces a finished incoming transfer on a non-Plasma
+  // desktop: notifyrc has no fileReceived event, and the KJob it raises needs
+  // KDE's job-tracker protocol, which Quattro does not implement. It also
+  // preserves the sender's mtime, so the file does not even sort to the top of
+  // the download folder. This service does the announcing — once per session,
+  // which is the whole reason it is a service and not per-bar state.
+  //
+  // The name is device-controlled: it is only ever a single argv element and a
+  // display string, never part of a command. The click carries no device data
+  // at all — its --exec is a fixed literal plus a slot integer minted here.
+  property bool notifyEnabled: true
+  readonly property var imageExtensions: ["jpg", "jpeg", "png", "gif", "webp",
+    "heic", "heif", "avif", "bmp", "tif", "tiff"]
+  readonly property int thumbSlots: 8
+  property int thumbSlot: 0
+  property var pendingNotify: null
+  property var receivedBySlot: ({})
+  // Straight into the runtime dir, which always exists and is cleared at
+  // logout — no directory to create, and nothing to clean up.
+  readonly property string thumbDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
+
+  function isImageName(name) {
+    var i = String(name).lastIndexOf(".")
+    if (i === -1) return false
+    return root.imageExtensions.indexOf(String(name).substring(i + 1).toLowerCase()) !== -1
+  }
+
+  function openReceivedSlot(slot) {
+    var n = parseInt(String(slot), 10)
+    if (!isFinite(n) || n < 0 || n >= root.thumbSlots) return
+    var path = root.receivedBySlot[n]
+    if (!path) return
+    // gio, not xdg-open: xdg-open silently fails to launch a handler from the
+    // shell's context on Quattro (verified against a registered imv.desktop
+    // and a name with no spaces). glib is already a hard dependency of
+    // kdeconnect, so this adds nothing. The path is one argv element.
+    Quickshell.execDetached(["gio", "open", path])
+  }
+
+  function sendReceivedNotification(name, image, slot) {
+    // 10s: omarchy clamps to min(30000, max(8000, requested)) for normal urgency.
+    var argv = ["omarchy-notification-send", "--app-name", "omarchy-connect",
+      "-g", "\u{f01da}", "-u", "normal", "-t", "10000"]
+    argv = argv.concat(["--exec", slot >= 0
+      ? "omarchy-shell seb-krz.omarchy-connect openReceived " + slot
+      : "omarchy-shell seb-krz.omarchy-connect openReceivedFolder"])
+    if (image) argv = argv.concat(["--image", image])
+    notifyProc.command = argv.concat(["File received", name])
+    notifyProc.running = true
+  }
+
+  onFileReceived: function (path, name) {
+    if (!root.notifyEnabled) return
+    root.thumbSlot = (root.thumbSlot + 1) % root.thumbSlots
+    var slot = root.thumbSlot
+    var map = {}
+    for (var k in root.receivedBySlot) map[k] = root.receivedBySlot[k]
+    map[slot] = path
+    root.receivedBySlot = map
+
+    if (!root.isImageName(name)) {
+      root.sendReceivedNotification(name, "", slot)
+      return
+    }
+    // Quattro's Qt build has no HEIF decoder, and phone photos are HEIC, so
+    // the popup gets a transcoded thumbnail rather than the original.
+    var dst = root.thumbDir + "/omarchy-connect-thumb-" + slot + ".png"
+    root.pendingNotify = { name: name, image: dst, slot: slot }
+    thumbProc.running = false
+    thumbProc.command = ["magick", path + "[0]", "-auto-orient",
+      "-thumbnail", "256x256", "-strip", dst]
+    thumbProc.running = true
+    thumbTimer.restart()
+  }
+
+  Process { id: notifyProc }
+
+  Process {
+    id: thumbProc
+    // Any failure — no ImageMagick, an unreadable file, a multi-frame image
+    // that wrote elsewhere — degrades to a notification with no thumbnail.
+    onExited: function (exitCode) {
+      thumbTimer.stop()
+      var p = root.pendingNotify
+      root.pendingNotify = null
+      if (!p) return
+      root.sendReceivedNotification(p.name, exitCode === 0 ? p.image : "", p.slot)
+    }
+  }
+
+  // A transcode that stalls must not leave the arrival unannounced.
+  Timer {
+    id: thumbTimer
+    interval: 8000
+    onTriggered: thumbProc.running = false
+  }
+
   Dbus { id: dbus }
 
   Component.onCompleted: {

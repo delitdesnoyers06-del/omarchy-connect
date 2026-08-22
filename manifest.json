@@ -7,9 +7,11 @@
   "license": "MIT",
   "description": "Native KDE Connect integration: device status, battery, pairing and actions",
   "kinds": [
+    "service",
     "bar-widget"
   ],
   "entryPoints": {
+    "service": "Service.qml",
     "barWidget": "Panel.qml"
   },
   "barWidget": {
