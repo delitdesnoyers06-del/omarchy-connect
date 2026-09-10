@@ -283,11 +283,14 @@ Item {
     // 10s: omarchy clamps to min(30000, max(8000, requested)) for normal urgency.
     var argv = ["omarchy-notification-send", "--app-name", "omarchy-connect",
       "-g", "\u{f01da}", "-u", "normal", "-t", "10000"]
-    argv = argv.concat(["--exec", slot >= 0
-      ? "omarchy-shell seb-krz.omarchy-connect openReceived " + slot
-      : "omarchy-shell seb-krz.omarchy-connect openReceivedFolder"])
     if (image) argv = argv.concat(["--image", image])
-    notifyProc.command = argv.concat(["File received", name])
+    argv = argv.concat(["File received", name])
+    // --exec must come last and be given as separate words: the script takes
+    // everything after it as the click argv, and the shell runs that argv
+    // directly (Util.execArgv, no shell), so the slot integer is one element.
+    argv = argv.concat(["--exec", "omarchy-shell", "seb-krz.omarchy-connect"])
+    argv = argv.concat(slot >= 0 ? ["openReceived", String(slot)] : ["openReceivedFolder"])
+    notifyProc.command = argv
     notifyProc.running = true
   }
 
