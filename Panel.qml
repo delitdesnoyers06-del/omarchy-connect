@@ -146,7 +146,10 @@ Panel {
 
   // ---- derived state ----
   readonly property string ff: root.bar ? root.bar.fontFamily : Style.font.family
-  readonly property color fg: root.barForeground
+  // Popup content sits on the panel surface, not the wallpaper, so it takes the
+  // theme foreground. barForeground shifts with the wallpaper when the bar is
+  // transparent and goes unreadable on the dark panel (issue #1).
+  readonly property color fg: root.bar ? root.bar.foreground : Color.foreground
   readonly property color urgentColor: root.bar ? root.bar.urgent : Color.urgent
 
   readonly property var primary: svc.primaryDevice
