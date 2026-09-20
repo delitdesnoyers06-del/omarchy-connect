@@ -58,6 +58,24 @@ var devBad = M.normalizeDevice("x", null, null, null)
 assert.strictEqual(devBad.name, "Unknown device")
 assert.strictEqual(devBad.connected, false)
 
+// ---- remote filesystem (sftp) capability ----
+
+// Capability requires the plugin to be loaded, not merely supported.
+var devSftp = M.normalizeDevice("id4", reachableProps, ["kdeconnect_sftp"], null)
+assert.strictEqual(devSftp.caps.sftp, true)
+assert.strictEqual(devSftp.caps.ring, false)
+
+// mountPoint() returns s
+assert.strictEqual(M.parseString('{"type":"s","data":["/run/user/1000/abc"]}'), "/run/user/1000/abc")
+assert.strictEqual(M.parseString('{"type":"b","data":[true]}'), null)
+assert.strictEqual(M.parseString("nonsense"), null)
+
+// getDirectories() returns a{sv}: mount path -> display name
+assert.deepStrictEqual(
+  M.parseStorageDirectories('{"type":"a{sv}","data":[{"/run/user/1000/abc/storage/emulated/0":{"type":"s","data":"Device memory"}}]}'),
+  ["/run/user/1000/abc/storage/emulated/0"])
+assert.deepStrictEqual(M.parseStorageDirectories("nonsense"), [])
+
 // ---- ordering ----
 
 function mini(id, name, connected, paired, reachable) {

@@ -156,6 +156,15 @@ Item {
   // text is user input passed as a single argv element — never a shell string.
   function shareText(id, text) { _cliAction("sharetext", id, ["kdeconnect-cli", "--share-text", text, "--device", id]) }
 
+  // Open the device's storage in the file manager. This calls the same
+  // bundled handler that is registered for the kdeconnect:// scheme, so the
+  // panel action and KDE Connect's own "Explore device" button stay in
+  // lockstep. The handler resolves the device id over D-Bus — no IP here.
+  function openFiles(id) {
+    if (!id) return
+    Quickshell.execDetached([integration.handlerPath, "kdeconnect://" + id + "/"])
+  }
+
   function rediscover() {
     dbus.call(_daemonCall("forceOnNetworkChange"), function () { refresh() })
   }
@@ -339,6 +348,8 @@ Item {
     interval: 8000
     onTriggered: thumbProc.running = false
   }
+
+  Integration { id: integration }
 
   Dbus { id: dbus }
 

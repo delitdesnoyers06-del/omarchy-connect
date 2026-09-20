@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Open the storage of a paired KDE Connect device in the file manager.
+#
+# This is registered as the handler for the kdeconnect:// URL scheme so the
+# KDE Connect application's own "Explore device" button works on desktops
+# without KIO (e.g. Omarchy + Nautilus), and it is usable directly:
+#
+#   kdeconnect-open kdeconnect://<device-id>/            # the phone's storage
+#   kdeconnect-open kdeconnect://<device-id>/Download    # a sub-path
+#   kdeconnect-open <device-id>                          # same as the root
+#
+# The device id is stable; an IP address is never used here. The KDE Connect
+# daemon owns discovery and the sshfs mount, both keyed by that id. The sshfs
+# mount's "/" is a virtual root the daemon maps onto the device's single
+# advertised storage directory, which is exactly what getDirectories returns.
+#
+# Dependencies are ones the plugin already has: systemd's busctl and glib's
+# gio. No Python, no KIO, no Dolphin.
+set -euo pipefail
+
+usage() {
+  echo "usage: ${0##*/} (kdeconnect://<device-id>[/path] | <device-id>)" >&2
+}
+
+url="${1:-}"
+if [ -z "$url" ]; then
+  usage
+  exit 2
+fi
+
+# Accept kdeconnect://<id>/<path>, kdeconnect://<id>, or a bare <id>.
+if [[ "$url" == kdeconnect://* ]]; then
+  rest="${url#kdeconnect://}"
+  device_id="${rest%%/*}"
+  if [[ "$rest" == */* ]]; then subpath="/${rest#*/}"; else subpath=""; fi
+else
+  device_id="$url"
+  subpath=""
+fi
+
+# No id given: fall back to the first paired and reachable device.
+if [ -z "$device_id" ] && command -v kdeconnect-cli >/dev/null 2>&1; then
+  device_id="$(kdeconnect-cli --list-available --id-only 2>/dev/null | head -n1 || true)"
+fi
+if [ -z "$device_id" ]; then
+  echo "kdeconnect-open: no device id given and no reachable device found" >&2
+  exit 1
+fi
+
+if ! command -v busctl >/dev/null 2>&1; then
+  echo "kdeconnect-open: busctl (systemd) is required to reach the KDE Connect daemon" >&2
+  exit 1
+fi
+
+sftp_iface="org.kde.kdeconnect.device.sftp"
+sftp_path="/modules/kdeconnect/devices/$device_id/sftp"
+
+# call <method> [timeout-seconds] -> raw --json=short output on stdout
+call() {
+  busctl --user --timeout="${2:-5}" call org.kde.kdeconnect "$sftp_path" \
+    "$sftp_iface" "$1" --json=short 2>/dev/null
+}
+
+# The daemon starts sshfs on demand. A device that is offline or has the
+# Remote-filesystem plugin disabled fails here and we bail out cleanly.
+if ! call mountAndWait 20 >/dev/null; then
+  echo "kdeconnect-open: could not mount the filesystem of device $device_id" >&2
+  exit 1
+fi
+
+# mountPoint -> s  : {"type":"s","data":["/run/user/1000/<id>"]}
+# getDirectories -> a{sv} : {"...data":[{"/run/.../storage/emulated/0":{...}}]}
+mount_point="$(call mountPoint | sed -n 's/.*"data":\["\([^"]*\)"\].*/\1/p')"
+storage="$(call getDirectories | sed -n 's/.*"data":\[{"\([^"]*\)":.*/\1/p')"
+[ -n "$storage" ] || storage="$mount_point"
+
+target="$storage"
+if [ -n "$subpath" ] && [ "$subpath" != "/" ]; then
+  relative="${subpath#/}"
+  # Paths are relative to the storage the virtual root shows; anything else
+  # falls back to the raw sshfs mount (mirrors KDE's own KIO worker).
+  if [ -d "$storage/$relative" ]; then
+    target="$storage/$relative"
+  elif [ -n "$mount_point" ]; then
+    target="$mount_point/$relative"
+  else
+    target="$storage/$relative"
+  fi
+fi
+
+if command -v gio >/dev/null 2>&1; then
+  exec gio open "$target"
+fi
+exec xdg-open "$target"

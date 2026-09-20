@@ -34,6 +34,11 @@ Panel {
     function openReceivedFolder() {
       if (root.primary && root.svc) root.svc.openReceivedFolder(root.primary.id)
     }
+    // Open the primary device's storage in the file manager; scriptable for
+    // testing. The device id is resolved here, never taken off the wire.
+    function browseFiles() {
+      if (root.primary && root.svc) root.svc.openFiles(root.primary.id)
+    }
     function setNotifyOnReceive(on: bool) {
       root.setNotifyOnReceive(on)
     }
@@ -206,7 +211,8 @@ Panel {
     { key: "ring", cap: "ring", icon: "\u{f009e}", label: "Ring" },
     { key: "ping", cap: "ping", icon: "\u{f0361}", label: "Ping" },
     { key: "clipboard", cap: "clipboard", icon: "\u{f014d}", label: "Clipboard" },
-    { key: "sharetext", cap: "share", icon: "\u{f048a}", label: "Text" }
+    { key: "sharetext", cap: "share", icon: "\u{f048a}", label: "Text", settingsLabel: "Share text" },
+    { key: "files", cap: "sftp", icon: "\u{f024b}", label: "Files", settingsLabel: "Browse phone files" }
   ]
   readonly property var hiddenActions: setting("hiddenActions", []) || []
 
@@ -244,6 +250,7 @@ Panel {
     if (key === "ring") svc.ring(primary.id)
     else if (key === "ping") svc.ping(primary.id)
     else if (key === "clipboard") svc.sendClipboard(primary.id)
+    else if (key === "files") svc.openFiles(primary.id)
   }
 
   function sendShareText() {
@@ -950,7 +957,7 @@ Panel {
             Toggle {
               required property var modelData
               width: parent.width
-              label: modelData.label === "Text" ? "Share text" : modelData.label
+              label: modelData.settingsLabel || modelData.label
               checked: root.hiddenActions.indexOf(modelData.key) === -1
               foreground: root.fg
               fontFamily: root.ff

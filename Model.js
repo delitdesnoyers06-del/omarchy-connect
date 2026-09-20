@@ -40,6 +40,13 @@ function parseStringList(raw) {
   return parseDeviceIds(raw)
 }
 
+// A method returning a single string, e.g. sftp mountPoint() (s).
+function parseString(raw) {
+  var data = parseCallResult(raw)
+  if (!data || typeof data[0] !== "string") return null
+  return data[0]
+}
+
 // ---------- normalization ----------
 
 function str(v, fallback) { return typeof v === "string" ? v : (fallback || "") }
@@ -52,6 +59,7 @@ var CAPABILITY_PLUGINS = {
   ping: "kdeconnect_ping",
   clipboard: "kdeconnect_clipboard",
   share: "kdeconnect_share",
+  sftp: "kdeconnect_sftp",
   remoteCommands: "kdeconnect_remotecommands"
 }
 
@@ -163,6 +171,16 @@ function parseShareUrl(line) {
   var path = m[1].substring(7)
   try { path = decodeURIComponent(path) } catch (e) { return null }
   return path.length > 0 ? path : null
+}
+
+// sftp getDirectories() returns a{sv}: absolute local mount path -> display
+// name. The daemon reports exactly one storage on Android; the paths are
+// keyed by the device's sshfs mount point, never by an IP. Returns [] on
+// malformed input so callers can fall back to mountPoint().
+function parseStorageDirectories(raw) {
+  var props = parseProperties(raw)
+  if (!props) return []
+  return Object.keys(props)
 }
 
 function baseName(path) {
@@ -391,6 +409,8 @@ if (typeof module !== "undefined") {
     parseProperties: parseProperties,
     parseDeviceIds: parseDeviceIds,
     parseStringList: parseStringList,
+    parseString: parseString,
+    parseStorageDirectories: parseStorageDirectories,
     normalizeDevice: normalizeDevice,
     orderDevices: orderDevices,
     selectPrimaryId: selectPrimaryId,
