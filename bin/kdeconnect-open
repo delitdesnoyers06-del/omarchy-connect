@@ -22,6 +22,22 @@ usage() {
   echo "usage: ${0##*/} (kdeconnect://<device-id>[/path] | <device-id>)" >&2
 }
 
+# Desktop feedback for the paths that have no panel to show a status: KDE
+# Connect's own "Explore device" button and a terminal invocation.
+notify() {
+  if command -v omarchy-notification-send >/dev/null 2>&1; then
+    omarchy-notification-send --app-name omarchy-connect -u normal -t 10000 "$1" "$2" >/dev/null 2>&1 || true
+  elif command -v notify-send >/dev/null 2>&1; then
+    notify-send --app-name=omarchy-connect --urgency=normal "$1" "$2" >/dev/null 2>&1 || true
+  fi
+}
+
+fail() {
+  notify "Remote files" "$1"
+  echo "kdeconnect-open: $1" >&2
+  exit 1
+}
+
 url="${1:-}"
 if [ -z "$url" ]; then
   usage
@@ -48,9 +64,14 @@ if [ -z "$device_id" ]; then
 fi
 
 if ! command -v busctl >/dev/null 2>&1; then
-  echo "kdeconnect-open: busctl (systemd) is required to reach the KDE Connect daemon" >&2
-  exit 1
+  fail "busctl (systemd) is required to reach the KDE Connect daemon"
 fi
+
+# KDE Connect's sftp plugin shells out to sshfs to mount the device, and the
+# kdeconnect package lists sshfs only as an *optional* dependency, so it is
+# commonly missing. Say so instead of failing with the daemon's opaque text.
+command -v sshfs >/dev/null 2>&1 \
+  || fail "Remote files need sshfs. Install it with:  omarchy-pkg-add sshfs"
 
 sftp_iface="org.kde.kdeconnect.device.sftp"
 sftp_path="/modules/kdeconnect/devices/$device_id/sftp"
@@ -62,10 +83,11 @@ call() {
 }
 
 # The daemon starts sshfs on demand. A device that is offline or has the
-# Remote-filesystem plugin disabled fails here and we bail out cleanly.
-if ! call mountAndWait 20 >/dev/null; then
-  echo "kdeconnect-open: could not mount the filesystem of device $device_id" >&2
-  exit 1
+# Remote-filesystem plugin disabled reports false here; surface its own error.
+mounted="$(call mountAndWait 20 | sed -n 's/.*"data":\[\([a-z]*\)\].*/\1/p')"
+if [ "$mounted" != "true" ]; then
+  reason="$(call getMountError | sed -n 's/.*"data":\["\([^"]*\)"\].*/\1/p')"
+  fail "${reason:-Could not reach device $device_id — is KDE Connect running?}"
 fi
 
 # mountPoint -> s  : {"type":"s","data":["/run/user/1000/<id>"]}

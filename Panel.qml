@@ -328,6 +328,7 @@ Panel {
       if (a.kind === "sharetext") return "Sending text…"
       return "Sending clipboard…"
     }
+    if (a.kind === "files-no-sshfs") return "Install sshfs to browse files"
     if (a.status === "failed") return "Action failed"
     if (a.kind === "clipboard") return "Clipboard sent"
     if (a.kind === "sharetext") return "Text sent"

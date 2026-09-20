@@ -49,6 +49,18 @@ omarchy-pkg-add kdeconnect
 (`omarchy-pkg-add` wraps `pacman -S --needed` with sudo handling — no AUR
 needed. Plain `sudo pacman -S kdeconnect` works too.)
 
+The **Browse Files** action additionally needs **`sshfs`**. KDE Connect lists it
+only as an *optional* dependency, so it is not pulled in automatically — install
+it once:
+
+```bash
+omarchy-pkg-add sshfs
+```
+
+Without it the action stays listed and reports **"Install sshfs to browse
+files"** when clicked (KDE Connect's own *Explore device* button tells you the
+same way).
+
 `busctl` (from systemd) and Quattro's `omarchy-shell` are already part of
 Omarchy — nothing else to install on the desktop.
 
@@ -64,10 +76,11 @@ over TCP/UDP ports **1714–1764**; if a firewall is active, allow that range
 rules itself).
 
 The **Browse Files** action installs a small `kdeconnect://` handler using
-`busctl` (systemd) and `gio` (glib) — both already present on Omarchy. If
-`xdg-mime` (xdg-utils) and `update-desktop-database` (desktop-file-utils) are
-available, the handler is registered automatically; the action itself works
-without them.
+`busctl` (systemd) and `gio` (glib) — both already present on Omarchy. The
+handler adds no runtime dependency of its own; it drives the same `sshfs` mount
+required above. If `xdg-mime` (xdg-utils) and `update-desktop-database`
+(desktop-file-utils) are available, the handler is registered automatically;
+the action itself works without them.
 
 ## Install
 
@@ -117,7 +130,9 @@ Settings persist in `~/.config/omarchy/shell.json` under the plugin's entry.
 **Browse Files** mounts the device over KDE Connect's SFTP plugin on demand and
 opens the directory the phone advertises. On Android that is
 `/storage/emulated/0`: the SFTP root itself is not listable, and the daemon
-maps its virtual root onto that single storage for you.
+maps its virtual root onto that single storage for you. This needs the `sshfs`
+package (see [Requirements](#requirements)) — KDE Connect's sftp plugin mounts
+the device with it, and `kdeconnect` lists it only as an optional dependency.
 
 The action also installs a desktop integration so KDE Connect's own **Explore
 device** button works on Omarchy, which ships Nautilus (no KIO):
@@ -165,6 +180,8 @@ harmless and keeps working on its own). Remove it explicitly with
   KDE Connect app open, and that ports 1714–1764 aren't firewalled.
 - **Device won't connect** — open `kdeconnect-cli -l` in a terminal to see what
   KDE Connect itself reports; Omarchy Connect reflects that same state.
+- **"Install sshfs to browse files" / Browse Files fails** — install KDE
+  Connect's optional dependency: `omarchy-pkg-add sshfs`.
 
 ## Architecture
 

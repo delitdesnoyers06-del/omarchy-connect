@@ -11,6 +11,9 @@ Item {
 
   // ---- public state ----
   property bool cliInstalled: false
+  // KDE Connect's remote-filesystem plugin needs the sshfs binary; the
+  // kdeconnect package ships it only as an optional dependency.
+  property bool sshfsInstalled: false
   property string backendState: Model.BackendState.Unknown
   property bool refreshing: false
   property var devices: []
@@ -162,6 +165,13 @@ Item {
   // lockstep. The handler resolves the device id over D-Bus — no IP here.
   function openFiles(id) {
     if (!id) return
+    // Report the missing optional dependency in the panel rather than letting
+    // the action fail silently.
+    if (!sshfsInstalled) {
+      action = { kind: "files-no-sshfs", deviceId: id, status: "failed" }
+      actionClear.restart()
+      return
+    }
     Quickshell.execDetached([integration.handlerPath, "kdeconnect://" + id + "/"])
   }
 
@@ -246,6 +256,12 @@ Item {
       root.cliInstalled = exitCode === 0
       root.refresh()
     }
+  }
+
+  Process {
+    id: whichSshfs
+    command: ["which", "sshfs"]
+    onExited: function (exitCode) { root.sshfsInstalled = exitCode === 0 }
   }
 
   // ---- received-file announcement ----
@@ -355,6 +371,7 @@ Item {
 
   Component.onCompleted: {
     whichCli.running = true
+    whichSshfs.running = true
     dbus.startMonitor()
   }
 }
