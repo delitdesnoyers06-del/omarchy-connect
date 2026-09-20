@@ -168,16 +168,16 @@ Item {
   // bundled handler that is registered for the kdeconnect:// scheme, so the
   // panel action and KDE Connect's own "Explore device" button stay in
   // lockstep. The handler resolves the device id over D-Bus — no IP here.
+  //
+  // sshfs is only an optional dependency and can be installed after the shell
+  // has started, so the startup probe is not trusted here: re-check it live on
+  // click before deciding whether to open or to ask for it.
+  property string _pendingFilesId: ""
+
   function openFiles(id) {
     if (!id) return
-    // Report the missing optional dependency in the panel rather than letting
-    // the action fail silently.
-    if (!sshfsInstalled) {
-      action = { kind: "files-no-sshfs", deviceId: id, status: "failed" }
-      actionClear.restart()
-      return
-    }
-    Quickshell.execDetached([integration.handlerPath, "kdeconnect://" + id + "/"])
+    _pendingFilesId = id
+    sshfsProbe.running = true
   }
 
   function rediscover() {
@@ -267,6 +267,25 @@ Item {
     id: whichSshfs
     command: ["which", "sshfs"]
     onExited: function (exitCode) { root.sshfsInstalled = exitCode === 0 }
+  }
+
+  // On-click sshfs check, separate from the startup probe so a click can never
+  // race it. If sshfs appeared since startup, the action opens; otherwise the
+  // panel reports the missing optional dependency rather than failing silently.
+  Process {
+    id: sshfsProbe
+    command: ["which", "sshfs"]
+    onExited: function (exitCode) {
+      root.sshfsInstalled = exitCode === 0
+      var id = root._pendingFilesId
+      root._pendingFilesId = ""
+      if (exitCode !== 0) {
+        root.action = { kind: "files-no-sshfs", deviceId: id, status: "failed" }
+        actionClear.restart()
+        return
+      }
+      if (id) Quickshell.execDetached([integration.handlerPath, "kdeconnect://" + id + "/"])
+    }
   }
 
   // ---- received-file announcement ----
