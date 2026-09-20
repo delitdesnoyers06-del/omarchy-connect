@@ -9,10 +9,14 @@
 #   ~/.local/share/applications/kdeconnect-url-handler.desktop
 #   a registered x-scheme-handler/kdeconnect default
 #
-# The service runs `kdeconnect-install install` once per session; it is
-# idempotent and can equally be run by hand. Removal is explicit:
+# The integration is opt-in: the panel's "kdeconnect:// link handler" setting
+# (default off) runs `kdeconnect-install install` when switched on and
+# `kdeconnect-install uninstall` when switched off. The service never runs it
+# on its own. It can equally be run by hand; `install` is idempotent.
 #
-#   kdeconnect-install uninstall
+# `install` claims the scheme default only when no other handler owns it. A
+# default the user (or another application) already set is left untouched.
+# `uninstall` removes only our own association; foreign lines survive.
 #
 # Usage: kdeconnect-install [install|uninstall|status]
 set -euo pipefail
@@ -40,6 +44,34 @@ refresh_databases() {
   fi
 }
 
+# The effective default for the scheme, across every mimeapps.list xdg-mime
+# consults. Empty when the scheme has no default at all.
+current_scheme_default() {
+  if command -v xdg-mime >/dev/null 2>&1; then
+    xdg-mime query default x-scheme-handler/kdeconnect 2>/dev/null || true
+  fi
+}
+
+# Delete only our own association from one mimeapps.list, in place. A line
+# that names any other handler is preserved byte-for-byte.
+remove_own_scheme_line() {
+  local file="$1" tmp="$1.omarchy-connect.tmp"
+  [ -f "$file" ] || return 0
+  if awk -v name="$desktop_name" '
+    /^x-scheme-handler\/kdeconnect=/ {
+      value = $0
+      sub(/^[^=]*=/, "", value)
+      gsub(/;/, "", value)
+      if (value == name) next
+    }
+    { print }
+  ' "$file" > "$tmp"; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+  fi
+}
+
 install_integration() {
   [ -f "$handler_src" ] || { echo "${0##*/}: handler not found: $handler_src" >&2; exit 1; }
   [ -f "$template" ] || { echo "${0##*/}: template not found: $template" >&2; exit 1; }
@@ -52,7 +84,13 @@ install_integration() {
 
   if command -v xdg-mime >/dev/null 2>&1; then
     mkdir -p "$(dirname "$mimeapps")"
-    xdg-mime default "$desktop_name" x-scheme-handler/kdeconnect
+    local existing
+    existing="$(current_scheme_default)"
+    if [ -z "$existing" ] || [ "$existing" = "$desktop_name" ]; then
+      xdg-mime default "$desktop_name" x-scheme-handler/kdeconnect
+    else
+      echo "${0##*/}: x-scheme-handler/kdeconnect already has a default ($existing); leaving it unchanged" >&2
+    fi
   fi
 
   echo "${0##*/}: installed $handler_dst and $desktop_dst"
@@ -62,10 +100,10 @@ uninstall_integration() {
   rm -f "$desktop_dst" "$handler_dst"
   refresh_databases
 
-  # Drop only our own default; other MIME associations stay untouched.
-  if [ -f "$mimeapps" ]; then
-    sed -i '/^x-scheme-handler\/kdeconnect=/d' "$mimeapps"
-  fi
+  # Drop only our own default; another handler's line survives untouched.
+  # xdg-mime writes the config-dir file, but check the data-dir one too.
+  remove_own_scheme_line "$mimeapps"
+  remove_own_scheme_line "$apps_dir/mimeapps.list"
 
   echo "${0##*/}: removed $handler_dst and $desktop_dst"
 }
@@ -76,6 +114,7 @@ status_integration() {
   echo "${0##*/}: $state"
   echo "  handler: $handler_dst"
   echo "  desktop: $desktop_dst"
+  echo "  default: $(current_scheme_default)"
 }
 
 case "${1:-install}" in

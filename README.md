@@ -23,9 +23,9 @@ Plasma or a separate KDE Connect frontend.
 - **Find Device, Ping, Send Clipboard, Share Text, Browse Files** —
   capability-driven: actions appear only when the device's KDE Connect plugins
   provide them, and each can be hidden in settings. **Browse Files** opens the
-  device's storage in your file manager and registers a `kdeconnect://` handler,
-  so KDE Connect's own "Explore device" button works on Omarchy too (see
-  [Remote files](#remote-files)).
+  device's storage in your file manager; an opt-in setting additionally
+  registers a `kdeconnect://` handler so KDE Connect's own "Explore device"
+  button works on Omarchy too (see [Remote files](#remote-files)).
 - **Useful failure states** — distinguishes "not installed", "daemon not
   running", "no devices" and "device offline" instead of one "Disconnected".
 - **No custom daemon, no protocol reimplementation** — KDE Connect keeps
@@ -75,12 +75,13 @@ over TCP/UDP ports **1714–1764**; if a firewall is active, allow that range
 (Omarchy Connect will surface this in its diagnostics but never edits firewall
 rules itself).
 
-The **Browse Files** action installs a small `kdeconnect://` handler using
-`busctl` (systemd) and `gio` (glib) — both already present on Omarchy. The
-handler adds no runtime dependency of its own; it drives the same `sshfs` mount
-required above. If `xdg-mime` (xdg-utils) and `update-desktop-database`
-(desktop-file-utils) are available, the handler is registered automatically;
-the action itself works without them.
+The **Browse Files** action's `kdeconnect://` handler is written with `busctl`
+(systemd) and `gio` (glib) — both already present on Omarchy — and adds no
+runtime dependency of its own; it drives the same `sshfs` mount required above.
+The handler is **opt-in**, off by default (see [Remote files](#remote-files));
+if `xdg-mime` (xdg-utils) and `update-desktop-database` (desktop-file-utils)
+are available it is registered automatically when switched on, and the action
+itself works without either.
 
 ## Install
 
@@ -121,6 +122,10 @@ Open the panel and click the gear icon. You can:
 - **suppress KDE's system pairing popup** (opt-in, off by default) so only the
   panel shows pairing requests — enabling it writes one scoped, reversible line
   to `~/.config/kdeconnect.notifyrc`, removed automatically on disable;
+- install or remove the **`kdeconnect://` link handler** (opt-in, off by
+  default) so KDE Connect's own *Explore device* button opens the device in
+  your default file manager — see [Remote files](#remote-files) for exactly
+  what it writes and where;
 - move the widget to the **left, center or right** of the bar.
 
 Settings persist in `~/.config/omarchy/shell.json` under the plugin's entry.
@@ -134,22 +139,32 @@ maps its virtual root onto that single storage for you. This needs the `sshfs`
 package (see [Requirements](#requirements)) — KDE Connect's sftp plugin mounts
 the device with it, and `kdeconnect` lists it only as an optional dependency.
 
-The action also installs a desktop integration so KDE Connect's own **Explore
-device** button works on Omarchy, which ships Nautilus (no KIO):
-
-- `~/.local/bin/kdeconnect-open` — a `busctl` + `gio` handler; no Python, no
-  KIO, no Dolphin;
-- `~/.local/share/applications/kdeconnect-url-handler.desktop` — registers
-  `x-scheme-handler/kdeconnect`.
-
-It is installed automatically the first time the service runs, and is
-idempotent. Manage it by hand with:
+The action also bundles a desktop integration so KDE Connect's own **Explore
+device** button works on Omarchy, whose default file manager has no KIO. It is
+**opt-in** — the *kdeconnect:// link handler* setting, off by default — because
+installing it writes outside the plugin folder. Switching the setting on
+installs it; switching it off removes it again. Manage it by hand with:
 
 ```bash
 bin/kdeconnect-install install     # idempotent
 bin/kdeconnect-install status
 bin/kdeconnect-install uninstall
 ```
+
+What it touches outside the plugin folder (all under `$HOME`):
+
+- `~/.local/bin/kdeconnect-open` — the `busctl` + `gio` handler; no Python, no
+  KIO, no Dolphin;
+- `~/.local/share/applications/kdeconnect-url-handler.desktop` — registers
+  `x-scheme-handler/kdeconnect`;
+- one default line in `~/.config/mimeapps.list` for
+  `x-scheme-handler/kdeconnect` — only if no other handler already owns the
+  scheme. An existing default is left untouched, and `uninstall` removes only
+  our own line;
+- the `installUrlHandler` key in the plugin's entry in
+  `~/.config/omarchy/shell.json`.
+
+Nothing else, and nothing outside `$HOME`.
 
 There are no IP addresses anywhere: the daemon resolves the device, and the
 sshfs mount point is keyed by the stable device id, so a changing DHCP lease is
@@ -166,9 +181,11 @@ Disabling restores KDE's system pairing popup automatically, so nothing is left
 behind. KDE Connect itself is untouched; remove it separately with
 `sudo pacman -R kdeconnect` if you no longer want it.
 
-Removing the plugin leaves the small `kdeconnect://` handler behind (it is
-harmless and keeps working on its own). Remove it explicitly with
-`bin/kdeconnect-install uninstall`.
+The `kdeconnect://` integration is opt-in, so nothing is written outside the
+plugin folder unless you switched it on. If you did, switch the setting off
+first (which uninstalls it), or run `bin/kdeconnect-install uninstall` after
+removing the plugin. The copied handler is self-contained and keeps working
+until you do.
 
 ## Troubleshooting
 
@@ -182,6 +199,10 @@ harmless and keeps working on its own). Remove it explicitly with
   KDE Connect itself reports; Omarchy Connect reflects that same state.
 - **"Install sshfs to browse files" / Browse Files fails** — install KDE
   Connect's optional dependency: `omarchy-pkg-add sshfs`.
+- **KDE Connect's "Explore device" button does nothing** — the `kdeconnect://`
+  handler is opt-in; enable the *kdeconnect:// link handler* toggle in the panel
+  settings. The panel's own **Files** action needs no registration and always
+  works.
 
 ## Architecture
 
@@ -201,8 +222,8 @@ kdeconnectd ── session D-Bus ──┬── busctl monitor (events → debo
   `busctl` fixtures (`node tests/model.test.js`).
 - `Service.qml` — state, snapshot reconciliation, actions, pairing.
 - `Panel.qml` — bar indicator + panel presentation.
-- `Integration.qml` — installs the `kdeconnect://` desktop integration once per
-  session (best effort; never affects the panel).
+- `Integration.qml` — installs/removes the `kdeconnect://` desktop integration
+  when the opt-in setting is toggled (best effort; never affects the panel).
 - `bin/` — the `kdeconnect://` handler and its installer.
 
 ## License

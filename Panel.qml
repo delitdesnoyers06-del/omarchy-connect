@@ -65,6 +65,7 @@ Panel {
     if (!root.svc) return
     root.svc.preferredDeviceId = root.setting("preferredDevice", "")
     root.svc.notifyEnabled = root.notifyOnReceive
+    root.svc.urlHandlerEnabled = root.installUrlHandler
   }
   onSvcChanged: root.syncServiceSettings()
   onSettingsChanged: root.syncServiceSettings()
@@ -237,6 +238,17 @@ Panel {
 
   function setNotifyOnReceive(on) {
     root.settings = Object.assign({}, root.settings, { notifyOnReceive: !!on })
+    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
+  }
+
+  // ---- kdeconnect:// handler (opt-in, default off) ----
+  // The install writes outside the plugin folder (~/.local/bin, a .desktop and
+  // a mimeapps default), so it runs only when the user switches this on.
+  // Switching it off uninstalls again; the Files action never needs it.
+  readonly property bool installUrlHandler: setting("installUrlHandler", false) === true
+
+  function setInstallUrlHandler(on) {
+    root.settings = Object.assign({}, root.settings, { installUrlHandler: !!on })
     if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
   }
 
@@ -984,6 +996,16 @@ Panel {
             foreground: root.fg
             fontFamily: root.ff
             onClicked: root.setSuppressPairingPopup(!root.suppressPairingPopup)
+          }
+
+          Toggle {
+            width: parent.width
+            label: "kdeconnect:// link handler"
+            description: "Let KDE Connect's Explore button open your file manager"
+            checked: root.installUrlHandler
+            foreground: root.fg
+            fontFamily: root.ff
+            onClicked: root.setInstallUrlHandler(!root.installUrlHandler)
           }
 
           PanelSectionHeader {

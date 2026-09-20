@@ -14,6 +14,11 @@ Item {
   // KDE Connect's remote-filesystem plugin needs the sshfs binary; the
   // kdeconnect package ships it only as an optional dependency.
   property bool sshfsInstalled: false
+  // Opt-in setting (pushed by the panel): install or remove the
+  // kdeconnect:// desktop integration. Off by default, so nothing outside the
+  // plugin folder is written until the user asks for it. The Files action
+  // below uses the bundled handler directly and does not need this.
+  property bool urlHandlerEnabled: false
   property string backendState: Model.BackendState.Unknown
   property bool refreshing: false
   property var devices: []
@@ -366,6 +371,13 @@ Item {
   }
 
   Integration { id: integration }
+
+  // Only an actual setting change — or the first sync after a shell start with
+  // the setting already on — installs/uninstalls the integration.
+  onUrlHandlerEnabledChanged: {
+    if (urlHandlerEnabled) integration.install()
+    else integration.uninstall()
+  }
 
   Dbus { id: dbus }
 
