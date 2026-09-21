@@ -171,7 +171,11 @@ target="$storage"
 if [ -n "$relative" ]; then
   # Paths are relative to the storage the virtual root shows; anything else
   # falls back to the raw sshfs mount (mirrors KDE's own KIO worker).
-  if [ -d "$storage/$relative" ]; then
+  #
+  # The probe touches the sshfs mount, and a connection that drops right after
+  # mountAndWait leaves an endpoint that blocks instead of failing. Bound it,
+  # so a dead mount falls through to the fallback rather than hanging here.
+  if timeout 5 test -d "$storage/$relative"; then
     target="$storage/$relative"
   elif [ -n "$mount_point" ]; then
     target="$mount_point/$relative"

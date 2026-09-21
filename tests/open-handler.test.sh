@@ -66,6 +66,14 @@ write_stub sshfs <<'STUB'
 exit 0
 STUB
 
+# The sub-path probe runs under timeout(1); log it and answer as the test says
+# (0 = directory exists, 124 = the probe timed out on a dead endpoint).
+write_stub timeout <<'STUB'
+#!/usr/bin/env bash
+echo "TIMEOUT $*" >> "$STUB_CALLS"
+exit "${STUB_DIR_PROBE:-0}"
+STUB
+
 # Failures notify; keep the tests quiet and side-effect free.
 write_stub notify-send <<'STUB'
 #!/usr/bin/env bash
@@ -92,13 +100,13 @@ sshfs_line() {
   echo "kdeconnect@192.168.1.175:/ $MOUNT_POINT fuse.sshfs rw,nosuid,nodev,relatime,user_id=1000,group_id=1000 0 0"
 }
 
-# run <is-mounted-truth> <mount-table-content>
+# run <is-mounted-truth> <mount-table-content> [sub-path]
 run() {
   : > "$STUB_CALLS"
   printf '%s' "$2" > "$tmp/mounts"
   export STUB_IS_MOUNTED="$1"
   export OMARCHY_CONNECT_MOUNTS="$tmp/mounts"
-  if ! "$handler" "kdeconnect://$DEVICE/" >"$tmp/out" 2>"$tmp/err"; then
+  if ! "$handler" "kdeconnect://$DEVICE/${3:-}" >"$tmp/out" 2>"$tmp/err"; then
     fail "handler exited non-zero: $(cat "$tmp/err")"
   fi
 }
@@ -153,5 +161,23 @@ if grep -q FUSERMOUNT3 "$STUB_CALLS"; then
   fail "touched a mount it does not own: $(calls)"
 fi
 echo "ok 4 - other mounts and other filesystems are left alone"
+
+# ---- 5. a sub-path probe that stalls is bounded and falls back -----------
+
+STUB_DIR_PROBE=124 run true "$(sshfs_line)
+" Download
+grep -qF "TIMEOUT 5 test -d $MOUNT_POINT/storage/emulated/0/Download" "$STUB_CALLS" \
+  || fail "sub-path probe was not bounded by timeout: $(calls)"
+grep -qF "GIO open $MOUNT_POINT/Download" "$STUB_CALLS" \
+  || fail "stalled probe did not fall back to the raw mount: $(calls)"
+echo "ok 5 - stalled sub-path probe times out and falls back"
+
+# ---- 6. an existing sub-path opens inside the storage --------------------
+
+STUB_DIR_PROBE=0 run true "$(sshfs_line)
+" Download
+grep -qF "GIO open $MOUNT_POINT/storage/emulated/0/Download" "$STUB_CALLS" \
+  || fail "existing sub-path was not opened inside the storage: $(calls)"
+echo "ok 6 - existing sub-path opens inside the storage"
 
 echo "all open-handler tests passed"

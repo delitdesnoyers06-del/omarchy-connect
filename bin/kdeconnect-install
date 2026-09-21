@@ -66,10 +66,11 @@ remove_own_scheme_line() {
     }
     { print }
   ' "$file" > "$tmp"; then
-    mv "$tmp" "$file"
-  else
-    rm -f "$tmp"
+    # Write through rather than mv over: a mimeapps.list that is a symlink
+    # (dotfile managers) must stay one.
+    cat "$tmp" > "$file"
   fi
+  rm -f "$tmp"
 }
 
 install_integration() {
