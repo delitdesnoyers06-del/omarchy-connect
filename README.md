@@ -199,6 +199,12 @@ until you do.
   KDE Connect itself reports; Omarchy Connect reflects that same state.
 - **"Install sshfs to browse files" / Browse Files fails** — install KDE
   Connect's optional dependency: `omarchy-pkg-add sshfs`.
+- **Browse Files fails and kdeconnectd logs "sshfs finished with exit code 1"**
+  — a connection that dropped after a successful mount leaves a dead
+  `fuse.sshfs` mount behind, and the daemon's next attempt fails on it. The
+  handler detects the leftover and unmounts it before mounting again, so this
+  heals on the next click; a stubborn point can be cleared by hand with
+  `fusermount3 -uz /run/user/<uid>/<device-id>`.
 - **KDE Connect's "Explore device" button does nothing** — the `kdeconnect://`
   handler is opt-in; enable the *kdeconnect:// link handler* toggle in the panel
   settings. The panel's own **Files** action needs no registration and always
@@ -224,7 +230,9 @@ kdeconnectd ── session D-Bus ──┬── busctl monitor (events → debo
 - `Panel.qml` — bar indicator + panel presentation.
 - `Integration.qml` — installs/removes the `kdeconnect://` desktop integration
   when the opt-in setting is toggled (best effort; never affects the panel).
-- `bin/` — the `kdeconnect://` handler and its installer.
+- `bin/` — the `kdeconnect://` handler and its installer. The handler's
+  mount handling, including the stale-mount self-heal, is covered by
+  `bash tests/open-handler.test.sh`.
 
 ## License
 

@@ -115,6 +115,45 @@ call() {
     "$sftp_iface" "$1" --json=short 2>/dev/null || true
 }
 
+# mountPoint -> s  : {"type":"s","data":["/run/user/1000/<id>"]}
+# The point is keyed by the device id and is reported whether or not the device
+# is mounted, so it is known before the mount attempt below.
+#
+# A connection that dropped after a successful mount leaves its fuse.sshfs
+# mount registered in the kernel even though the sshfs process is gone: the
+# endpoint then answers "Transport endpoint is not connected" and the daemon's
+# next mount dies with the opaque "sshfs finished with exit code 1", which is
+# indistinguishable from a real failure. When the daemon says the device is not
+# mounted yet the mount table still lists this device's own sshfs point, that
+# entry is a leftover: reap it first, so the failure self-heals instead of
+# reaching the user as a failed action.
+#
+# mounts_file and the fusermount lookup are overridable so tests can drive this
+# without touching the real mount table (see tests/open-handler.test.sh).
+mounts_file="${OMARCHY_CONNECT_MOUNTS:-/proc/mounts}"
+
+# Unmount a dead sshfs point of *this* device only, identified by the
+# "<mount-point> fuse.sshfs " pair in the mount table; anything else on that
+# path (or another device's mount) is left untouched.
+unmount_stale_sshfs() {
+  local point="$1" tool
+  grep -qsF "$point fuse.sshfs " "$mounts_file" || return 0
+  for tool in fusermount3 fusermount; do
+    command -v "$tool" >/dev/null 2>&1 || continue
+    # -z (lazy) first: a dead endpoint that still has a stalled reference on it
+    # refuses a regular unmount, but detaching it eagerly is safe here.
+    "$tool" -uz "$point" >/dev/null 2>&1 && return 0
+    "$tool" -u "$point" >/dev/null 2>&1 && return 0
+  done
+  return 0
+}
+
+mount_point="$(call mountPoint | sed -n 's/.*"data":\["\([^"]*\)"\].*/\1/p')"
+is_mounted="$(call isMounted | sed -n 's/.*"data":\[\([a-z]*\)\].*/\1/p')"
+if [ -n "$mount_point" ] && [ "$is_mounted" != "true" ]; then
+  unmount_stale_sshfs "$mount_point"
+fi
+
 # The daemon starts sshfs on demand. A device that is offline or has the
 # Remote-filesystem plugin disabled reports false here; surface its own error.
 mounted="$(call mountAndWait 20 | sed -n 's/.*"data":\[\([a-z]*\)\].*/\1/p')"
@@ -123,9 +162,8 @@ if [ "$mounted" != "true" ]; then
   fail "${reason:-Could not reach device $device_id — is KDE Connect running?}"
 fi
 
-# mountPoint -> s  : {"type":"s","data":["/run/user/1000/<id>"]}
+# mount_point is already known from above.
 # getDirectories -> a{sv} : {"...data":[{"/run/.../storage/emulated/0":{...}}]}
-mount_point="$(call mountPoint | sed -n 's/.*"data":\["\([^"]*\)"\].*/\1/p')"
 storage="$(call getDirectories | sed -n 's/.*"data":\[{"\([^"]*\)":.*/\1/p')"
 [ -n "$storage" ] || storage="$mount_point"
 
